@@ -13,35 +13,27 @@ app.use(
     logger,
     serializers: {
       req(req) {
-        return {
-          id: req.id,
-          method: req.method,
-          url: req.url?.split("?")[0],
-        };
+        return { id: req.id, method: req.method, url: req.url?.split("?")[0] };
       },
       res(res) {
-        return {
-          statusCode: res.statusCode,
-        };
+        return { statusCode: res.statusCode };
       },
     },
   }),
 );
 
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-}));
-
+app.use(cors({ origin: "*", methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], allowedHeaders: ["Content-Type", "Authorization"] }));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-// Serve signed PDFs statically
+// Serve uploaded contract files
+const contractsDir = join(process.cwd(), "uploads", "contracts");
+if (!existsSync(contractsDir)) mkdirSync(contractsDir, { recursive: true });
+app.use("/api/contract-files", express.static(contractsDir));
+
+// Serve signed PDFs
 const pdfsDir = join(process.cwd(), "uploads", "signed-pdfs");
-if (!existsSync(pdfsDir)) {
-  mkdirSync(pdfsDir, { recursive: true });
-}
+if (!existsSync(pdfsDir)) mkdirSync(pdfsDir, { recursive: true });
 app.use("/api/pdfs", express.static(pdfsDir));
 
 app.use("/api", router);
