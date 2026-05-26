@@ -3,13 +3,21 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Saathi Sign - Freelancer Contract & E-Signature Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: contracts
+    description: Contract management
+  - name: signing
+    description: Client signing workflow
+  - name: dashboard
+    description: Dashboard analytics
+  - name: settings
+    description: User settings
 paths:
   /healthz:
     get:
@@ -24,6 +32,239 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /contracts:
+    get:
+      operationId: listContracts
+      tags: [contracts]
+      summary: List all contracts
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, signed, expired, all]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of contracts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contract"
+    post:
+      operationId: createContract
+      tags: [contracts]
+      summary: Create a new contract
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContractInput"
+      responses:
+        "201":
+          description: Contract created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+
+  /contracts/{id}:
+    get:
+      operationId: getContract
+      tags: [contracts]
+      summary: Get a single contract
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Contract details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteContract
+      tags: [contracts]
+      summary: Delete a contract
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /contracts/{id}/generate-link:
+    post:
+      operationId: generateSigningLink
+      tags: [contracts]
+      summary: Generate a secure signing link for a contract
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SigningLinkInput"
+      responses:
+        "200":
+          description: Signing link generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SigningLinkResult"
+
+  /sign/{token}:
+    get:
+      operationId: getSigningPage
+      tags: [signing]
+      summary: Get contract info for the signing page (public)
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Signing page data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SigningPageData"
+        "404":
+          description: Invalid or expired link
+        "410":
+          description: Link expired
+
+  /sign/{token}/submit:
+    post:
+      operationId: submitSignature
+      tags: [signing]
+      summary: Submit a signed contract (public)
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignatureSubmission"
+      responses:
+        "200":
+          description: Signature accepted and PDF generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignatureResult"
+        "400":
+          description: Invalid submission
+        "410":
+          description: Link expired
+
+  /contracts/{id}/download:
+    get:
+      operationId: downloadSignedPdf
+      tags: [contracts]
+      summary: Download the signed PDF for a contract
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Signed PDF download URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DownloadResult"
+        "404":
+          description: Not found
+
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get dashboard summary statistics
+      responses:
+        "200":
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /dashboard/recent-activity:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      summary: Get recent contract activity
+      responses:
+        "200":
+          description: Recent activity list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get user settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+    patch:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update user settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsUpdate"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +275,263 @@ components:
       required:
         - status
 
+    Contract:
+      type: object
+      required: [id, title, signerEmail, signerName, status, createdAt, token]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        signerEmail:
+          type: string
+        signerName:
+          type: string
+        signerCompany:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, signed, expired]
+        originalFileUrl:
+          type: ["string", "null"]
+        signedPdfUrl:
+          type: ["string", "null"]
+        token:
+          type: string
+        expiresAt:
+          type: ["string", "null"]
+        signerIp:
+          type: ["string", "null"]
+        signerLocation:
+          type: ["string", "null"]
+        signerDevice:
+          type: ["string", "null"]
+        selfieUrl:
+          type: ["string", "null"]
+        signedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        customFields:
+          type: ["string", "null"]
+
+    ContractInput:
+      type: object
+      required: [title, signerEmail, signerName]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        signerEmail:
+          type: string
+        signerName:
+          type: string
+        signerCompany:
+          type: string
+        originalFileUrl:
+          type: string
+        originalFileName:
+          type: string
+        customFields:
+          type: string
+        expiresInDays:
+          type: integer
+          default: 7
+
+    SigningLinkInput:
+      type: object
+      properties:
+        expiresInDays:
+          type: integer
+          default: 7
+
+    SigningLinkResult:
+      type: object
+      required: [signingUrl, token, expiresAt]
+      properties:
+        signingUrl:
+          type: string
+        token:
+          type: string
+        expiresAt:
+          type: string
+
+    SigningPageData:
+      type: object
+      required: [contractId, title, signerName, signerEmail]
+      properties:
+        contractId:
+          type: integer
+        title:
+          type: string
+        signerName:
+          type: string
+        signerEmail:
+          type: string
+        signerCompany:
+          type: ["string", "null"]
+        originalFileUrl:
+          type: ["string", "null"]
+        customFields:
+          type: ["string", "null"]
+        expiresAt:
+          type: ["string", "null"]
+
+    SignatureSubmission:
+      type: object
+      required: [signerName, signerEmail, signatureDataUrl]
+      properties:
+        signerName:
+          type: string
+        signerEmail:
+          type: string
+        signerCompany:
+          type: string
+        signerAddress:
+          type: string
+        signatureDataUrl:
+          type: string
+        selfieDataUrl:
+          type: string
+        ipAddress:
+          type: string
+        latitude:
+          type: ["number", "null"]
+        longitude:
+          type: ["number", "null"]
+        locationString:
+          type: string
+        deviceInfo:
+          type: string
+        timestamp:
+          type: string
+
+    SignatureResult:
+      type: object
+      required: [success, signedPdfUrl, contractId]
+      properties:
+        success:
+          type: boolean
+        signedPdfUrl:
+          type: string
+        contractId:
+          type: integer
+        message:
+          type: string
+
+    DownloadResult:
+      type: object
+      required: [downloadUrl, filename]
+      properties:
+        downloadUrl:
+          type: string
+        filename:
+          type: string
+
+    DashboardStats:
+      type: object
+      required: [totalContracts, pendingContracts, signedContracts, expiredContracts, signedThisMonth, avgSigningTimeHours]
+      properties:
+        totalContracts:
+          type: integer
+        pendingContracts:
+          type: integer
+        signedContracts:
+          type: integer
+        expiredContracts:
+          type: integer
+        signedThisMonth:
+          type: integer
+        avgSigningTimeHours:
+          type: ["number", "null"]
+
+    ActivityItem:
+      type: object
+      required: [id, type, contractTitle, signerName, timestamp]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [contract_created, contract_signed, contract_expired, link_generated]
+        contractTitle:
+          type: string
+        signerName:
+          type: string
+        timestamp:
+          type: string
+
+    Settings:
+      type: object
+      required: [id, businessName, businessEmail]
+      properties:
+        id:
+          type: integer
+        businessName:
+          type: string
+        businessEmail:
+          type: string
+        businessPhone:
+          type: ["string", "null"]
+        businessAddress:
+          type: ["string", "null"]
+        logoUrl:
+          type: ["string", "null"]
+        bankName:
+          type: ["string", "null"]
+        bankAccount:
+          type: ["string", "null"]
+        bankIfsc:
+          type: ["string", "null"]
+        bankSwift:
+          type: ["string", "null"]
+        upiId:
+          type: ["string", "null"]
+        paypalEmail:
+          type: ["string", "null"]
+        wiseEmail:
+          type: ["string", "null"]
+        gstNumber:
+          type: ["string", "null"]
+        panNumber:
+          type: ["string", "null"]
+        notifyEmail:
+          type: ["string", "null"]
+        emailOnSign:
+          type: boolean
+
+    SettingsUpdate:
+      type: object
+      properties:
+        businessName:
+          type: string
+        businessEmail:
+          type: string
+        businessPhone:
+          type: string
+        businessAddress:
+          type: string
+        logoUrl:
+          type: string
+        bankName:
+          type: string
+        bankAccount:
+          type: string
+        bankIfsc:
+          type: string
+        bankSwift:
+          type: string
+        upiId:
+          type: string
+        paypalEmail:
+          type: string
+        wiseEmail:
+          type: string
+        gstNumber:
+          type: string
+        panNumber:
+          type: string
+        notifyEmail:
+          type: string
+        emailOnSign:
+          type: boolean
