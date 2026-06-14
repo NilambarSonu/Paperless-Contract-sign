@@ -1,8 +1,11 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import { join } from "path";
 import { existsSync, mkdirSync } from "fs";
+import { clerkMiddleware, getAuth } from "@clerk/express";
+import { publishableKeyFromHost } from "@clerk/shared/keys";
+import { CLERK_PROXY_PATH, clerkProxyMiddleware, getClerkProxyHost } from "./middlewares/clerkProxyMiddleware.js";
 import router from "./routes/index.js";
 import { logger } from "./lib/logger.js";
 
@@ -22,9 +25,22 @@ app.use(
   }),
 );
 
+// Clerk proxy MUST come before body parsers (streams raw bytes)
+app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+
 app.use(cors({ origin: "*", methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], allowedHeaders: ["Content-Type", "Authorization"] }));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+// Clerk middleware — resolves publishable key per host for multi-domain support
+app.use(
+  clerkMiddleware((req) => ({
+    publishableKey: publishableKeyFromHost(
+      getClerkProxyHost(req) ?? "",
+      process.env.CLERK_PUBLISHABLE_KEY,
+    ),
+  })),
+);
 
 // Serve uploaded contract files
 const contractsDir = join(process.cwd(), "uploads", "contracts");
@@ -35,6 +51,16 @@ app.use("/api/contract-files", express.static(contractsDir));
 const pdfsDir = join(process.cwd(), "uploads", "signed-pdfs");
 if (!existsSync(pdfsDir)) mkdirSync(pdfsDir, { recursive: true });
 app.use("/api/pdfs", express.static(pdfsDir));
+
+// requireAuth middleware — used on protected routes
+export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+  const auth = getAuth(req);
+  if (!auth?.userId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  next();
+}
 
 app.use("/api", router);
 

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48" fill="none">
+  <rect width="40" height="40" rx="10" x="0" y="4" fill="#106EBE"/>
+  <path d="M9 24 C13 16 20 14 24 20 C28 26 31 16 35 20" stroke="#0FFCBF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <text x="50" y="32" font-family="'Space Grotesk', 'Inter', sans-serif" font-size="20" font-weight="700" fill="#0A1628" letter-spacing="-0.5">Saathi Sign</text>
+</svg>
