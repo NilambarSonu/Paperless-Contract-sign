@@ -1,5 +1,8 @@
 import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import { logger } from "./logger.js";
+
+const resend = process.env["RESEND_API_KEY"] ? new Resend(process.env["RESEND_API_KEY"]) : null;
 
 function createTransport() {
   const host = process.env["SMTP_HOST"];
@@ -102,10 +105,26 @@ export async function sendSigningLinkEmail(opts: SendSigningLinkEmailOpts): Prom
 </html>
   `;
 
+  if (resend) {
+    try {
+      await resend.emails.send({
+        from: `${fromName} <${fromEmail}>`,
+        to: opts.to,
+        subject: `Action Required: Sign "${opts.contractTitle}"`,
+        html,
+      });
+      logger.info({ to: opts.to }, "Signing link email sent via Resend");
+      return true;
+    } catch (err) {
+      logger.error({ err, to: opts.to }, "Failed to send signing link email via Resend");
+      return false;
+    }
+  }
+
   if (!transport) {
     logger.info(
       { to: opts.to, contractTitle: opts.contractTitle, signingUrl: opts.signingUrl },
-      "Email skipped — SMTP not configured. Signing link logged here."
+      "Email skipped — neither Resend API Key nor SMTP configured. Signing link logged here."
     );
     return false;
   }
@@ -117,10 +136,10 @@ export async function sendSigningLinkEmail(opts: SendSigningLinkEmailOpts): Prom
       subject: `Action Required: Sign "${opts.contractTitle}"`,
       html,
     });
-    logger.info({ to: opts.to }, "Signing link email sent");
+    logger.info({ to: opts.to }, "Signing link email sent via SMTP");
     return true;
   } catch (err) {
-    logger.error({ err, to: opts.to }, "Failed to send signing link email");
+    logger.error({ err, to: opts.to }, "Failed to send signing link email via SMTP");
     return false;
   }
 }
@@ -201,8 +220,24 @@ export async function sendRejectionEmail(opts: SendRejectionEmailOpts): Promise<
 </html>
   `;
 
+  if (resend) {
+    try {
+      await resend.emails.send({
+        from: `${fromName} <${fromEmail}>`,
+        to: opts.to,
+        subject: `Contract Rejected: "${opts.contractTitle}" — Client Feedback`,
+        html,
+      });
+      logger.info({ to: opts.to }, "Rejection email sent via Resend");
+      return true;
+    } catch (err) {
+      logger.error({ err, to: opts.to }, "Failed to send rejection email via Resend");
+      return false;
+    }
+  }
+
   if (!transport) {
-    logger.info({ to: opts.to, contractTitle: opts.contractTitle, reason: opts.reason }, "Rejection email skipped — SMTP not configured");
+    logger.info({ to: opts.to, contractTitle: opts.contractTitle, reason: opts.reason }, "Rejection email skipped — neither Resend API Key nor SMTP configured");
     return false;
   }
 
@@ -213,21 +248,16 @@ export async function sendRejectionEmail(opts: SendRejectionEmailOpts): Promise<
       subject: `Contract Rejected: "${opts.contractTitle}" — Client Feedback`,
       html,
     });
-    logger.info({ to: opts.to }, "Rejection email sent");
+    logger.info({ to: opts.to }, "Rejection email sent via SMTP");
     return true;
   } catch (err) {
-    logger.error({ err, to: opts.to }, "Failed to send rejection email");
+    logger.error({ err, to: opts.to }, "Failed to send rejection email via SMTP");
     return false;
   }
 }
 
 export async function sendSignedConfirmationEmail(opts: SendSignedConfirmationOpts): Promise<boolean> {
   const transport = createTransport();
-  if (!transport) {
-    logger.info({ to: opts.to, contractTitle: opts.contractTitle }, "Confirmation email skipped — SMTP not configured");
-    return false;
-  }
-
   const fromEmail = opts.fromEmail ?? process.env["SMTP_USER"] ?? "noreply@saathisign.app";
   const fromName = opts.fromName ?? "Saathi Sign";
 
@@ -263,6 +293,27 @@ export async function sendSignedConfirmationEmail(opts: SendSignedConfirmationOp
 </html>
   `;
 
+  if (resend) {
+    try {
+      await resend.emails.send({
+        from: `${fromName} <${fromEmail}>`,
+        to: opts.to,
+        subject: `Signed: "${opts.contractTitle}" — Your copy is ready`,
+        html,
+      });
+      logger.info({ to: opts.to }, "Confirmation email sent via Resend");
+      return true;
+    } catch (err) {
+      logger.error({ err, to: opts.to }, "Failed to send confirmation email via Resend");
+      return false;
+    }
+  }
+
+  if (!transport) {
+    logger.info({ to: opts.to, contractTitle: opts.contractTitle }, "Confirmation email skipped — neither Resend API Key nor SMTP configured");
+    return false;
+  }
+
   try {
     await transport.sendMail({
       from: `"${fromName}" <${fromEmail}>`,
@@ -270,9 +321,10 @@ export async function sendSignedConfirmationEmail(opts: SendSignedConfirmationOp
       subject: `Signed: "${opts.contractTitle}" — Your copy is ready`,
       html,
     });
+    logger.info({ to: opts.to }, "Confirmation email sent via SMTP");
     return true;
   } catch (err) {
-    logger.error({ err }, "Failed to send confirmation email");
+    logger.error({ err }, "Failed to send confirmation email via SMTP");
     return false;
   }
 }
