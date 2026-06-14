@@ -76,7 +76,10 @@ app.get("/api/healthz", (req: Request, res: Response) => {
 app.use("/api", router);
 
 // Serve frontend static files in production if they exist
-const frontendDist = join(process.cwd(), "..", "frontend", "dist", "public");
+const frontendDistFromRoot = join(process.cwd(), "frontend", "dist", "public");
+const frontendDistFromBackend = join(process.cwd(), "..", "frontend", "dist", "public");
+const frontendDist = existsSync(frontendDistFromRoot) ? frontendDistFromRoot : frontendDistFromBackend;
+
 if (existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
   // Catch-all route to serve the React SPA index.html for client-side routing
