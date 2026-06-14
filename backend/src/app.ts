@@ -69,15 +69,20 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   next();
 }
 
-app.get("/", (req: Request, res: Response) => {
-  res.json({
-    status: "ok",
-    message: "Saathi Sign API Server",
-    version: "1.0.0",
-    healthz: "/api/healthz"
-  });
+app.get("/api/healthz", (req: Request, res: Response) => {
+  res.json({ status: "ok" });
 });
 
 app.use("/api", router);
+
+// Serve frontend static files in production if they exist
+const frontendDist = join(process.cwd(), "..", "frontend", "dist", "public");
+if (existsSync(frontendDist)) {
+  app.use(express.static(frontendDist));
+  // Catch-all route to serve the React SPA index.html for client-side routing
+  app.get("*", (req: Request, res: Response) => {
+    res.sendFile(join(frontendDist, "index.html"));
+  });
+}
 
 export default app;
