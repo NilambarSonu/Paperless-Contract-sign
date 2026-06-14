@@ -66,11 +66,28 @@ router.post("/contracts", async (req, res): Promise<void> => {
   expiresAt.setDate(expiresAt.getDate() + (expiresInDays ?? 7));
 
   const [contract] = await db.insert(contractsTable).values({
-    title, signerEmail, signerName,
-    signerCompany: signerCompany ?? null,
-    originalFileUrl: originalFileUrl ?? null,
-    customFields: customFields ?? null,
-    token, status: "pending", expiresAt,
+    title,
+    signerEmail,
+    signerName,
+    signerCompany: signerCompany || null,
+    originalFileUrl: originalFileUrl || null,
+    originalFileName: null,
+    signedPdfUrl: null,
+    token,
+    status: "pending",
+    expiresAt,
+    signerIp: null,
+    signerLocation: null,
+    signerDevice: null,
+    selfieUrl: null,
+    signatureDataUrl: null,
+    signerAddress: null,
+    latitude: null,
+    longitude: null,
+    signedAt: null,
+    customFields: customFields || null,
+    rejectionReason: null,
+    rejectedAt: null,
   }).returning();
 
   // Log creation
