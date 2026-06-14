@@ -79,7 +79,8 @@ export function NewContractPage() {
     try {
       const fd = new FormData();
       fd.append("file", f);
-      const res = await fetch("/api/contracts/upload-file", { method: "POST", body: fd });
+      const apiUrl = import.meta.env.VITE_API_URL || "";
+      const res = await fetch(`${apiUrl}/api/contracts/upload-file`, { method: "POST", body: fd });
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json() as { fileUrl: string };
       setUploadedFileUrl(data.fileUrl);
