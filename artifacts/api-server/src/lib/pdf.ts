@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, StandardFonts, degrees } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 
 export interface SignedPdfOptions {
   originalPdfBytes?: Uint8Array | null;
@@ -19,236 +19,335 @@ export interface SignedPdfOptions {
 
 function dataUrlToBytes(dataUrl: string): Uint8Array {
   const base64 = dataUrl.split(",")[1] || dataUrl;
-  const binary = Buffer.from(base64, "base64");
-  return new Uint8Array(binary);
+  return new Uint8Array(Buffer.from(base64, "base64"));
+}
+
+function formatTimestamp(ts: string): string {
+  try {
+    const d = new Date(ts);
+    return d.toLocaleString("en-US", {
+      year: "numeric", month: "long", day: "numeric",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      timeZoneName: "short",
+    });
+  } catch { return ts; }
 }
 
 export async function generateSignedPdf(opts: SignedPdfOptions): Promise<Uint8Array> {
+  // ── Colors ──────────────────────────────────────────────────────────────
+  const navy       = rgb(0.039, 0.086, 0.157);   // #0A1628
+  const blue       = rgb(0.063, 0.431, 0.745);   // #106EBE
+  const mint       = rgb(0.059, 0.988, 0.749);   // #0FFCBF
+  const darkText   = rgb(0.067, 0.122, 0.220);
+  const mutedText  = rgb(0.38,  0.47,  0.58);
+  const lightBlue  = rgb(0.94,  0.97,  1.00);    // row fill
+  const white      = rgb(1, 1, 1);
+  const divider    = rgb(0.88,  0.92,  0.96);
+
+  // ── Build document ───────────────────────────────────────────────────────
   const pdfDoc = await PDFDocument.create();
-  const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const regular   = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const bold      = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const oblique   = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
 
-  const primaryBlue = rgb(0.063, 0.431, 0.745);
-  const mintGreen = rgb(0.059, 0.988, 0.749);
-  const darkText = rgb(0.067, 0.122, 0.22);
-  const mutedText = rgb(0.35, 0.42, 0.52);
-  const white = rgb(1, 1, 1);
-  const lightBg = rgb(0.94, 0.97, 0.99);
-
-  // If original PDF bytes are provided, embed them
+  // Copy original PDF pages first
   if (opts.originalPdfBytes && opts.originalPdfBytes.length > 0) {
     try {
-      const originalDoc = await PDFDocument.load(opts.originalPdfBytes);
-      const copiedPages = await pdfDoc.copyPages(originalDoc, originalDoc.getPageIndices());
-      copiedPages.forEach((page) => pdfDoc.addPage(page));
+      const srcDoc = await PDFDocument.load(opts.originalPdfBytes, { ignoreEncryption: true });
+      const pages = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+      pages.forEach((p) => pdfDoc.addPage(p));
     } catch {
-      // If can't load original, just create signature page
+      // If original can't be parsed, proceed with certificate only
     }
   }
 
-  // ---- Signature & Audit Page ----
-  const page = pdfDoc.addPage([612, 792]);
-  const { width, height } = page.getSize();
+  // ── Certificate page — A4 ───────────────────────────────────────────────
+  const W = 595.28;
+  const H = 841.89;
+  const MARGIN = 48;
+  const CONTENT_W = W - MARGIN * 2;
 
-  // Header gradient bar
-  page.drawRectangle({ x: 0, y: height - 80, width, height: 80, color: primaryBlue });
-  page.drawRectangle({ x: 0, y: height - 84, width, height: 4, color: mintGreen });
+  const cert = pdfDoc.addPage([W, H]);
 
-  // Logo area
-  page.drawText("SAATHI SIGN", {
-    x: 36,
-    y: height - 50,
-    size: 18,
-    font: helveticaBold,
+  // ── Full navy header band ────────────────────────────────────────────────
+  const HEADER_H = 100;
+  cert.drawRectangle({ x: 0, y: H - HEADER_H, width: W, height: HEADER_H, color: navy });
+
+  // Mint accent strip at bottom of header
+  cert.drawRectangle({ x: 0, y: H - HEADER_H - 3, width: W, height: 3, color: mint });
+
+  // Logo + brand
+  cert.drawText("SAATHI SIGN", {
+    x: MARGIN, y: H - 44,
+    size: 22, font: bold, color: white,
+  });
+  cert.drawText("Secure E-Signature Platform", {
+    x: MARGIN, y: H - 62,
+    size: 9, font: regular, color: rgb(0.6, 0.78, 0.92),
+  });
+
+  // "ELECTRONIC SIGNATURE CERTIFICATE" badge on the right
+  const badgeLabel = "ELECTRONIC SIGNATURE CERTIFICATE";
+  const badgeLabelW = bold.widthOfTextAtSize(badgeLabel, 7.5);
+  const badgeX = W - MARGIN - badgeLabelW - 16;
+  const badgeY = H - 58;
+  cert.drawRectangle({
+    x: badgeX - 8, y: badgeY - 5,
+    width: badgeLabelW + 16, height: 18,
+    color: blue,
+    borderColor: mint,
+    borderWidth: 1,
+  });
+  cert.drawText(badgeLabel, {
+    x: badgeX, y: badgeY,
+    size: 7.5, font: bold, color: white,
+  });
+
+  // Reference / page label under header
+  cert.drawText(`Appendix — Signature Certificate for: ${opts.contractTitle}`, {
+    x: MARGIN, y: H - HEADER_H - 18,
+    size: 8.5, font: oblique, color: mutedText,
+  });
+
+  // Thin blue rule
+  cert.drawRectangle({ x: MARGIN, y: H - HEADER_H - 22, width: CONTENT_W, height: 0.75, color: divider });
+
+  let y = H - HEADER_H - 42;
+
+  // ── Contract title block ─────────────────────────────────────────────────
+  cert.drawRectangle({ x: MARGIN, y: y - 2, width: CONTENT_W, height: 30, color: lightBlue });
+  cert.drawRectangle({ x: MARGIN, y: y - 2, width: 3, height: 30, color: blue });
+  cert.drawText("CONTRACT", {
+    x: MARGIN + 12, y: y + 16,
+    size: 7, font: bold, color: blue,
+  });
+  // Truncate long titles
+  const maxTitleLen = 72;
+  const titleText = opts.contractTitle.length > maxTitleLen
+    ? opts.contractTitle.substring(0, maxTitleLen - 3) + "..."
+    : opts.contractTitle;
+  cert.drawText(titleText, {
+    x: MARGIN + 12, y: y + 4,
+    size: 10, font: bold, color: darkText,
+  });
+  y -= 46;
+
+  // ── Helper: draw two-column table ────────────────────────────────────────
+  function drawRow(label: string, value: string, rowY: number, shaded: boolean) {
+    const rowH = 18;
+    const labelColW = 130;
+    if (shaded) {
+      cert.drawRectangle({ x: MARGIN, y: rowY - 4, width: CONTENT_W, height: rowH, color: lightBlue });
+    }
+    cert.drawText(label, { x: MARGIN + 8, y: rowY + 1, size: 8, font: bold, color: mutedText });
+    // Truncate value
+    const maxVal = Math.floor((CONTENT_W - labelColW - 20) / 5.5);
+    const valText = value.length > maxVal ? value.substring(0, maxVal - 3) + "..." : value;
+    cert.drawText(valText, { x: MARGIN + labelColW, y: rowY + 1, size: 8, font: regular, color: darkText });
+    cert.drawRectangle({ x: MARGIN, y: rowY - 4, width: CONTENT_W, height: 0.5, color: divider });
+  }
+
+  // ── Section: Signer Information ──────────────────────────────────────────
+  cert.drawText("SIGNER INFORMATION", {
+    x: MARGIN, y,
+    size: 8, font: bold, color: blue,
+  });
+  cert.drawRectangle({ x: MARGIN, y: y - 4, width: CONTENT_W, height: 1, color: blue });
+  y -= 20;
+
+  const signerRows: [string, string][] = [
+    ["Full Name",    opts.signerName],
+    ["Email",        opts.signerEmail],
+    ["Company",      opts.signerCompany  || "—"],
+    ["Address",      opts.signerAddress  || "—"],
+  ];
+  signerRows.forEach(([lbl, val], i) => {
+    drawRow(lbl, val, y, i % 2 === 0);
+    y -= 18;
+  });
+
+  y -= 14;
+
+  // ── Section: Verification & Audit Trail ─────────────────────────────────
+  cert.drawText("VERIFICATION & AUDIT TRAIL", {
+    x: MARGIN, y,
+    size: 8, font: bold, color: blue,
+  });
+  cert.drawRectangle({ x: MARGIN, y: y - 4, width: CONTENT_W, height: 1, color: blue });
+  y -= 20;
+
+  const auditRows: [string, string][] = [
+    ["Signed At",      formatTimestamp(opts.timestamp)],
+    ["IP Address",     opts.ipAddress        || "Not captured"],
+    ["GPS Location",   opts.locationString   || "Not captured"],
+    ["Coordinates",    (opts.latitude && opts.longitude)
+      ? `${opts.latitude.toFixed(6)}° N, ${opts.longitude.toFixed(6)}° E`
+      : "Not captured"],
+    ["Device / Browser", opts.deviceInfo     || "Not captured"],
+  ];
+  auditRows.forEach(([lbl, val], i) => {
+    drawRow(lbl, val, y, i % 2 === 0);
+    y -= 18;
+  });
+
+  y -= 20;
+
+  // ── Signature + Selfie side by side ──────────────────────────────────────
+  // Section header
+  cert.drawText("DIGITAL SIGNATURE & IDENTITY VERIFICATION", {
+    x: MARGIN, y,
+    size: 8, font: bold, color: blue,
+  });
+  cert.drawRectangle({ x: MARGIN, y: y - 4, width: CONTENT_W, height: 1, color: blue });
+  y -= 18;
+
+  const SIG_W   = 290;
+  const SIG_H   = 120;
+  const SELFIE_W = 180;
+  const SELFIE_H = 140;
+  const GAP      = CONTENT_W - SIG_W - SELFIE_W;
+
+  const sigBoxY     = y - SIG_H;
+  const selfieBoxY  = y - SELFIE_H;
+
+  // Signature panel
+  cert.drawRectangle({
+    x: MARGIN, y: sigBoxY - 2,
+    width: SIG_W, height: SIG_H + 4,
     color: white,
-  });
-  page.drawText("E-Signature Certificate", {
-    x: 36,
-    y: height - 68,
-    size: 10,
-    font: helveticaFont,
-    color: rgb(0.8, 0.95, 1),
+    borderColor: blue,
+    borderWidth: 1.5,
   });
 
-  // Contract title section
-  page.drawRectangle({ x: 0, y: height - 130, width, height: 46, color: lightBg });
-  page.drawText("CONTRACT SIGNED SUCCESSFULLY", {
-    x: 36,
-    y: height - 107,
-    size: 9,
-    font: helveticaBold,
-    color: primaryBlue,
-  });
-  page.drawText(opts.contractTitle, {
-    x: 36,
-    y: height - 122,
-    size: 14,
-    font: helveticaBold,
-    color: darkText,
+  // Selfie panel
+  cert.drawRectangle({
+    x: MARGIN + SIG_W + GAP, y: selfieBoxY - 2,
+    width: SELFIE_W, height: SELFIE_H + 4,
+    color: white,
+    borderColor: mint,
+    borderWidth: 2,
   });
 
-  let y = height - 160;
-
-  // Signer Details
-  page.drawText("SIGNER INFORMATION", {
-    x: 36,
-    y,
-    size: 8,
-    font: helveticaBold,
-    color: primaryBlue,
-  });
-  y -= 4;
-  page.drawRectangle({ x: 36, y, width: width - 72, height: 1, color: primaryBlue });
-  y -= 18;
-
-  const infoRows = [
-    ["Full Name", opts.signerName],
-    ["Email", opts.signerEmail],
-    ["Company", opts.signerCompany || "—"],
-    ["Address", opts.signerAddress || "—"],
-  ];
-
-  for (const [label, value] of infoRows) {
-    page.drawText(label + ":", { x: 36, y, size: 9, font: helveticaBold, color: mutedText });
-    page.drawText(value, { x: 160, y, size: 9, font: helveticaFont, color: darkText });
-    y -= 16;
-  }
-
-  y -= 12;
-
-  // Verification Details
-  page.drawText("VERIFICATION & AUDIT TRAIL", {
-    x: 36,
-    y,
-    size: 8,
-    font: helveticaBold,
-    color: primaryBlue,
-  });
-  y -= 4;
-  page.drawRectangle({ x: 36, y, width: width - 72, height: 1, color: primaryBlue });
-  y -= 18;
-
-  const auditRows = [
-    ["Signed At", opts.timestamp],
-    ["IP Address", opts.ipAddress || "Not captured"],
-    ["Location", opts.locationString || "Not captured"],
-    ["Coordinates", opts.latitude && opts.longitude ? `${opts.latitude.toFixed(4)}, ${opts.longitude.toFixed(4)}` : "Not captured"],
-    ["Device/Browser", opts.deviceInfo || "Not captured"],
-  ];
-
-  for (const [label, value] of auditRows) {
-    page.drawText(label + ":", { x: 36, y, size: 9, font: helveticaBold, color: mutedText });
-    const truncated = value.length > 70 ? value.substring(0, 67) + "..." : value;
-    page.drawText(truncated, { x: 160, y, size: 9, font: helveticaFont, color: darkText });
-    y -= 16;
-  }
-
-  y -= 16;
-
-  // Signature image
-  if (opts.signatureDataUrl && opts.signatureDataUrl.startsWith("data:image")) {
+  // Embed signature image
+  if (opts.signatureDataUrl?.startsWith("data:image")) {
     try {
       const sigBytes = dataUrlToBytes(opts.signatureDataUrl);
-      const sigImage = opts.signatureDataUrl.includes("png")
+      const sigImg = opts.signatureDataUrl.includes("png")
         ? await pdfDoc.embedPng(sigBytes)
         : await pdfDoc.embedJpg(sigBytes);
 
-      const sigBoxWidth = 240;
-      const sigBoxHeight = 90;
-      const sigX = 36;
-      const sigY = y - sigBoxHeight - 10;
+      // Fit inside the box with padding
+      const pad = 8;
+      const maxW = SIG_W - pad * 2;
+      const maxH = SIG_H - pad * 2;
+      const imgDims = sigImg.scale(1);
+      const scaleW = maxW / imgDims.width;
+      const scaleH = maxH / imgDims.height;
+      const scale = Math.min(scaleW, scaleH, 1);
+      const drawW = imgDims.width * scale;
+      const drawH = imgDims.height * scale;
+      const drawX = MARGIN + pad + (maxW - drawW) / 2;
+      const drawY = sigBoxY + pad + (maxH - drawH) / 2;
 
-      page.drawRectangle({
-        x: sigX - 4,
-        y: sigY - 4,
-        width: sigBoxWidth + 8,
-        height: sigBoxHeight + 8,
-        color: lightBg,
-        borderColor: primaryBlue,
-        borderWidth: 1,
-      });
-
-      page.drawImage(sigImage, { x: sigX, y: sigY, width: sigBoxWidth, height: sigBoxHeight });
-
-      page.drawText("DIGITAL SIGNATURE", {
-        x: sigX,
-        y: sigY - 14,
-        size: 7,
-        font: helveticaBold,
-        color: mutedText,
-      });
-      page.drawText(opts.signerName, {
-        x: sigX,
-        y: sigY - 24,
-        size: 8,
-        font: helveticaFont,
-        color: darkText,
-      });
-
-      // Selfie
-      if (opts.selfieDataUrl && opts.selfieDataUrl.startsWith("data:image")) {
-        try {
-          const selfieBytes = dataUrlToBytes(opts.selfieDataUrl);
-          const selfieImage = opts.selfieDataUrl.includes("png")
-            ? await pdfDoc.embedPng(selfieBytes)
-            : await pdfDoc.embedJpg(selfieBytes);
-
-          const selfieX = sigX + sigBoxWidth + 30;
-          const selfieW = 100;
-          const selfieH = sigBoxHeight;
-
-          page.drawRectangle({
-            x: selfieX - 4,
-            y: sigY - 4,
-            width: selfieW + 8,
-            height: selfieH + 8,
-            color: lightBg,
-            borderColor: mintGreen,
-            borderWidth: 2,
-          });
-
-          page.drawImage(selfieImage, { x: selfieX, y: sigY, width: selfieW, height: selfieH });
-          page.drawText("IDENTITY SELFIE", {
-            x: selfieX,
-            y: sigY - 14,
-            size: 7,
-            font: helveticaBold,
-            color: mutedText,
-          });
-        } catch {
-          // skip selfie embed error
-        }
-      }
-
-      y = sigY - 50;
+      cert.drawImage(sigImg, { x: drawX, y: drawY, width: drawW, height: drawH });
     } catch {
-      // skip signature embed error
+      // skip on error
     }
   }
 
-  // Footer
-  page.drawRectangle({ x: 0, y: 0, width, height: 60, color: rgb(0.04, 0.12, 0.22) });
-  page.drawRectangle({ x: 0, y: 60, width, height: 2, color: mintGreen });
-  page.drawText("This document has been electronically signed via Saathi Sign.", {
-    x: 36,
-    y: 40,
-    size: 8,
-    font: helveticaFont,
-    color: rgb(0.7, 0.85, 0.95),
+  // Embed selfie image
+  if (opts.selfieDataUrl?.startsWith("data:image")) {
+    try {
+      const selfieBytes = dataUrlToBytes(opts.selfieDataUrl);
+      const selfieImg = opts.selfieDataUrl.includes("png")
+        ? await pdfDoc.embedPng(selfieBytes)
+        : await pdfDoc.embedJpg(selfieBytes);
+
+      const pad = 6;
+      const maxW = SELFIE_W - pad * 2;
+      const maxH = SELFIE_H - pad * 2;
+      const imgDims = selfieImg.scale(1);
+      const scaleW = maxW / imgDims.width;
+      const scaleH = maxH / imgDims.height;
+      const scale = Math.min(scaleW, scaleH, 1);
+      const drawW = imgDims.width * scale;
+      const drawH = imgDims.height * scale;
+      const drawX = MARGIN + SIG_W + GAP + pad + (maxW - drawW) / 2;
+      const drawY = selfieBoxY + pad + (maxH - drawH) / 2;
+
+      cert.drawImage(selfieImg, { x: drawX, y: drawY, width: drawW, height: drawH });
+    } catch {
+      // skip on error
+    }
+  }
+
+  // Labels beneath signature and selfie
+  const bottomLabelY = Math.min(sigBoxY, selfieBoxY) - 8;
+
+  cert.drawText("DIGITAL SIGNATURE", {
+    x: MARGIN, y: bottomLabelY - 6,
+    size: 6.5, font: bold, color: mutedText,
   });
-  page.drawText("The signature, selfie, IP address, location, and device info are recorded as part of the legal audit trail.", {
-    x: 36,
-    y: 26,
-    size: 7,
-    font: helveticaFont,
-    color: rgb(0.5, 0.65, 0.75),
+  cert.drawText(opts.signerName, {
+    x: MARGIN, y: bottomLabelY - 17,
+    size: 8, font: bold, color: darkText,
   });
-  page.drawText("saathisign.app", {
-    x: 36,
-    y: 12,
-    size: 7,
-    font: helveticaBold,
-    color: mintGreen,
+
+  cert.drawText("IDENTITY SELFIE", {
+    x: MARGIN + SIG_W + GAP, y: bottomLabelY - 6,
+    size: 6.5, font: bold, color: mutedText,
+  });
+  cert.drawText("Captured at time of signing", {
+    x: MARGIN + SIG_W + GAP, y: bottomLabelY - 17,
+    size: 7.5, font: regular, color: mutedText,
+  });
+
+  // ── Legal notice box ──────────────────────────────────────────────────────
+  const NOTICE_Y = 100;
+  cert.drawRectangle({
+    x: MARGIN, y: NOTICE_Y,
+    width: CONTENT_W, height: 44,
+    color: lightBlue,
+    borderColor: divider,
+    borderWidth: 1,
+  });
+  cert.drawText("LEGAL NOTICE", {
+    x: MARGIN + 10, y: NOTICE_Y + 30,
+    size: 7, font: bold, color: blue,
+  });
+  cert.drawText("This electronic signature was applied by the named signatory and is legally binding under applicable e-signature laws", {
+    x: MARGIN + 10, y: NOTICE_Y + 18,
+    size: 7.5, font: regular, color: darkText,
+  });
+  cert.drawText("including the IT Act 2000 (India), ESIGN Act (USA), and eIDAS (EU). The audit trail above is tamper-evident.", {
+    x: MARGIN + 10, y: NOTICE_Y + 7,
+    size: 7.5, font: regular, color: darkText,
+  });
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  cert.drawRectangle({ x: 0, y: 0, width: W, height: 68, color: navy });
+  cert.drawRectangle({ x: 0, y: 68, width: W, height: 2, color: mint });
+
+  cert.drawText("SAATHI SIGN", {
+    x: MARGIN, y: 48,
+    size: 9, font: bold, color: mint,
+  });
+  cert.drawText("Secure E-Signature Platform  ·  saathisign.app", {
+    x: MARGIN, y: 34,
+    size: 7.5, font: regular, color: rgb(0.55, 0.72, 0.86),
+  });
+  cert.drawText("This document was electronically signed and sealed. The signature, selfie, IP, GPS coordinates, and device info form part of the legal audit record.", {
+    x: MARGIN, y: 20,
+    size: 6.5, font: regular, color: rgb(0.4, 0.55, 0.67),
+  });
+
+  // Page number (certificate is always the last page)
+  const totalPages = pdfDoc.getPageCount();
+  const pageLabel = `Page ${totalPages} of ${totalPages}`;
+  const pageLabelW = regular.widthOfTextAtSize(pageLabel, 7);
+  cert.drawText(pageLabel, {
+    x: W - MARGIN - pageLabelW, y: 34,
+    size: 7, font: regular, color: rgb(0.4, 0.55, 0.67),
   });
 
   return pdfDoc.save();

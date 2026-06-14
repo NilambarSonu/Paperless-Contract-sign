@@ -149,6 +149,10 @@ export function SigningPage() {
   const [phase, setPhase] = useState<Phase>("preview");
   const [showRejectModal, setShowRejectModal] = useState(false);
 
+  // Keep a copy of the contract title so success/rejected screens don't
+  // depend on pageData (which React Query clears after a 400 refetch)
+  const [contractTitle, setContractTitle] = useState("");
+
   // ── Contract preview ─────────────────────────────────────────────────────
   const [contractRead, setContractRead] = useState(false);
 
@@ -181,12 +185,13 @@ export function SigningPage() {
   // ── Result ───────────────────────────────────────────────────────────────
   const [signedPdfUrl, setSignedPdfUrl] = useState("");
 
-  // Pre-fill form from pageData
+  // Pre-fill form from pageData and cache title for terminal screens
   useEffect(() => {
     if (pageData) {
       setSignerName(pageData.signerName || "");
       setSignerEmail(pageData.signerEmail || "");
       setSignerCompany(pageData.signerCompany || "");
+      setContractTitle(pageData.title || "");
     }
   }, [pageData]);
 
@@ -311,17 +316,10 @@ export function SigningPage() {
       </div>
     );
   }
-  if (error || !pageData) {
-    return (
-      <div className="min-h-screen flex items-center justify-center gradient-hero text-white text-center p-6">
-        <div>
-          <p className="text-2xl font-bold mb-2">Invalid or expired link</p>
-          <p className="text-slate-400">This signing link is no longer valid.</p>
-        </div>
-      </div>
-    );
-  }
 
+  // Success and rejection screens must be checked BEFORE the error guard —
+  // React Query refetches after signing and gets 400 "already signed",
+  // which would otherwise clobber the success screen.
   // ── Rejection sent ────────────────────────────────────────────────────────
   if (phase === "rejected_sent") {
     return (
@@ -343,7 +341,7 @@ export function SigningPage() {
             </p>
           </div>
           <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-600">
-            Contract: <strong>{pageData.title}</strong>
+            Contract: <strong>{contractTitle}</strong>
           </div>
           <p className="text-slate-400 text-sm">You can close this window.</p>
         </motion.div>
@@ -387,6 +385,18 @@ export function SigningPage() {
           )}
           <p className="text-slate-400 text-sm">You can close this window.</p>
         </motion.div>
+      </div>
+    );
+  }
+
+  // Error guard — after terminal phases so refetch-400 can't clobber success screen
+  if (error || !pageData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center gradient-hero text-white text-center p-6">
+        <div>
+          <p className="text-2xl font-bold mb-2">Invalid or expired link</p>
+          <p className="text-slate-400">This signing link is no longer valid.</p>
+        </div>
       </div>
     );
   }

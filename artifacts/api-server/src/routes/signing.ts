@@ -139,11 +139,29 @@ router.post("/sign/:token/submit", async (req, res): Promise<void> => {
     latitude, longitude, locationString, deviceInfo, timestamp,
   } = body.data;
 
+  // Load original uploaded PDF from disk (PDF only — DOCX can't be merged)
+  let originalPdfBytes: Uint8Array | null = null;
+  if (contract.originalFileUrl) {
+    try {
+      const urlPath = new URL(contract.originalFileUrl).pathname;
+      const filename = urlPath.split("/").pop() ?? "";
+      if (filename.toLowerCase().endsWith(".pdf")) {
+        const filePath = join(process.cwd(), "uploads", "contracts", filename);
+        const { readFile } = await import("fs/promises");
+        const buf = await readFile(filePath);
+        originalPdfBytes = new Uint8Array(buf);
+      }
+    } catch (err) {
+      req.log.warn({ err }, "Could not load original PDF — generating certificate only");
+    }
+  }
+
   // Generate signed PDF
   let signedPdfUrl: string | null = null;
   try {
     const pdfBytes = await generateSignedPdf({
       contractTitle: contract.title,
+      originalPdfBytes,
       signerName, signerEmail, signerCompany, signerAddress,
       signatureDataUrl, selfieDataUrl, ipAddress,
       latitude, longitude, locationString, deviceInfo,
