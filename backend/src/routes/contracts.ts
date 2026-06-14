@@ -65,30 +65,42 @@ router.post("/contracts", async (req, res): Promise<void> => {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + (expiresInDays ?? 7));
 
-  const [contract] = await db.insert(contractsTable).values({
-    title,
-    signerEmail,
-    signerName,
-    signerCompany: signerCompany || null,
-    originalFileUrl: originalFileUrl || null,
-    originalFileName: null,
-    signedPdfUrl: null,
-    token,
-    status: "pending",
-    expiresAt,
-    signerIp: null,
-    signerLocation: null,
-    signerDevice: null,
-    selfieUrl: null,
-    signatureDataUrl: null,
-    signerAddress: null,
-    latitude: null,
-    longitude: null,
-    signedAt: null,
-    customFields: customFields || null,
-    rejectionReason: null,
-    rejectedAt: null,
-  }).returning();
+  let contract;
+  try {
+    const result = await db.insert(contractsTable).values({
+      title,
+      signerEmail,
+      signerName,
+      signerCompany: signerCompany || null,
+      originalFileUrl: originalFileUrl || null,
+      originalFileName: null,
+      signedPdfUrl: null,
+      token,
+      status: "pending",
+      expiresAt,
+      signerIp: null,
+      signerLocation: null,
+      signerDevice: null,
+      selfieUrl: null,
+      signatureDataUrl: null,
+      signerAddress: null,
+      latitude: null,
+      longitude: null,
+      signedAt: null,
+      customFields: customFields || null,
+      rejectionReason: null,
+      rejectedAt: null,
+    }).returning();
+    contract = result[0];
+  } catch (err: any) {
+    console.error("====== POSTGRES INSERT ERROR ======");
+    console.error(err);
+    if (err.message) console.error("MESSAGE:", err.message);
+    if (err.detail) console.error("DETAIL:", err.detail);
+    if (err.hint) console.error("HINT:", err.hint);
+    if (err.code) console.error("CODE:", err.code);
+    throw err;
+  }
 
   // Log creation
   await db.insert(auditLogsTable).values({
