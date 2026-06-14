@@ -83,6 +83,18 @@ if (existsSync(frontendDist)) {
   app.get("*", (req: Request, res: Response) => {
     res.sendFile(join(frontendDist, "index.html"));
   });
+} else {
+  // Fallback if frontend is not built/found
+  app.get("/", (req: Request, res: Response) => {
+    res.json({
+      status: "ok",
+      message: "Saathi Sign API Server",
+      version: "1.0.0",
+      healthz: "/api/healthz",
+      frontendMissing: true,
+      checkedPath: frontendDist
+    });
+  });
 }
 
 export default app;
