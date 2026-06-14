@@ -8,8 +8,9 @@ import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useGetSettings, useUpdateSettings } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, User, Mail, Shield, ExternalLink } from "lucide-react";
 import { useEffect } from "react";
+import { useUser } from "@clerk/react";
 
 const formSchema = z.object({
   businessName: z.string().min(1, "Business Name is required"),
@@ -26,6 +27,7 @@ export function SettingsPage() {
   const { toast } = useToast();
   const { data: settings, isLoading } = useGetSettings();
   const updateSettings = useUpdateSettings();
+  const { user, isLoaded: userLoaded } = useUser();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -87,8 +89,85 @@ export function SettingsPage() {
       <div className="max-w-4xl mx-auto space-y-6">
         <div>
           <h1 className="font-display text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground mt-1">Manage your business profile and payment instructions.</p>
+          <p className="text-muted-foreground mt-1">Manage your account profile and business details.</p>
         </div>
+
+        {/* ── Clerk User Profile Card ─────────────────────────────────────── */}
+        <Card className="border shadow-sm overflow-hidden">
+          <CardHeader className="border-b bg-slate-50/60 px-6 py-4">
+            <CardTitle className="text-base font-semibold text-[#0A1628]">Your Account</CardTitle>
+            <CardDescription>Signed-in user details from Clerk.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-6">
+            {!userLoaded ? (
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 rounded-full bg-slate-200 animate-pulse" />
+                <div className="space-y-2">
+                  <div className="h-4 w-36 bg-slate-200 rounded animate-pulse" />
+                  <div className="h-3 w-52 bg-slate-100 rounded animate-pulse" />
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+                {/* Avatar */}
+                <div className="shrink-0">
+                  {user?.imageUrl ? (
+                    <img
+                      src={user.imageUrl}
+                      alt={user.fullName ?? "Avatar"}
+                      className="w-14 h-14 rounded-full object-cover ring-2 ring-[#106EBE]/20"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#106EBE] to-[#0FFCBF] flex items-center justify-center text-lg font-bold text-[#0A1628]">
+                      {(user?.firstName?.[0] ?? user?.primaryEmailAddress?.emailAddress?.[0] ?? "?").toUpperCase()}
+                    </div>
+                  )}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="font-semibold text-[#0A1628] capitalize truncate">
+                      {user?.fullName ?? user?.firstName ?? "—"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="text-sm text-slate-600 truncate">
+                      {user?.primaryEmailAddress?.emailAddress ?? "—"}
+                    </span>
+                    {user?.primaryEmailAddress?.verification?.status === "verified" && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-green-50 text-green-700 border border-green-200">
+                        ✓ Verified
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="text-xs text-slate-400 font-mono truncate">
+                      ID: {user?.id ?? "—"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Manage via Clerk */}
+                <div className="shrink-0">
+                  <a
+                    href="https://accounts.clerk.com/user"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button variant="outline" size="sm" className="gap-1.5 text-[#106EBE] border-[#106EBE]/30 hover:bg-[#106EBE]/5">
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Manage Account
+                    </Button>
+                  </a>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">

@@ -4,6 +4,7 @@ import { db, contractsTable, auditLogsTable, settingsTable } from "@workspace/db
 import { GetSigningPageParams, SubmitSignatureParams, SubmitSignatureBody } from "@workspace/api-zod";
 import { generateSignedPdf } from "../lib/pdf.js";
 import { sendSignedConfirmationEmail, sendRejectionEmail } from "../lib/email.js";
+import { uploadToCloudinary, isCloudinaryConfigured } from "../lib/cloudinary.js";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { existsSync } from "fs";
@@ -12,9 +13,10 @@ import { z } from "zod";
 const router: IRouter = Router();
 
 function getBaseUrl(): string {
-  return process.env["REPLIT_DOMAINS"]
-    ? `https://${process.env["REPLIT_DOMAINS"].split(",")[0]}`
-    : `http://localhost:${process.env["PORT"] ?? 8080}`;
+  if (process.env["RENDER_EXTERNAL_URL"]) return process.env["RENDER_EXTERNAL_URL"];
+  if (process.env["FRONTEND_URL"]) return process.env["FRONTEND_URL"];
+  if (process.env["REPLIT_DOMAINS"]) return `https://${process.env["REPLIT_DOMAINS"].split(",")[0]}`;
+  return `http://localhost:${process.env["PORT"] ?? 8080}`;
 }
 
 async function getAuthorEmail(): Promise<string | null> {
@@ -168,14 +170,26 @@ router.post("/sign/:token/submit", async (req, res): Promise<void> => {
       timestamp: timestamp || new Date().toISOString(),
     });
 
-    const uploadsDir = join(process.cwd(), "uploads", "signed-pdfs");
-    if (!existsSync(uploadsDir)) await mkdir(uploadsDir, { recursive: true });
+    const filename = `${contract.token}_signed`;
 
-    const filename = `${contract.token}_signed.pdf`;
-    await writeFile(join(uploadsDir, filename), pdfBytes);
-    signedPdfUrl = `${getBaseUrl()}/api/pdfs/${filename}`;
+    if (isCloudinaryConfigured()) {
+      // ── Production: upload to Cloudinary (permanent URL) ─────────────────
+      signedPdfUrl = await uploadToCloudinary(
+        Buffer.from(pdfBytes),
+        filename,
+        "signed-pdfs",
+        "raw",
+      );
+      req.log.info({ filename }, "Signed PDF uploaded to Cloudinary");
+    } else {
+      // ── Development: save to local disk ──────────────────────────────────
+      const uploadsDir = join(process.cwd(), "uploads", "signed-pdfs");
+      if (!existsSync(uploadsDir)) await mkdir(uploadsDir, { recursive: true });
+      await writeFile(join(uploadsDir, `${filename}.pdf`), pdfBytes);
+      signedPdfUrl = `${getBaseUrl()}/api/pdfs/${filename}.pdf`;
+    }
   } catch (err) {
-    req.log.error({ err }, "Failed to generate signed PDF");
+    req.log.error({ err }, "Failed to generate or store signed PDF");
   }
 
   const signedAt = new Date();

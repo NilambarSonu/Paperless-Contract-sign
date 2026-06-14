@@ -13,6 +13,9 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { NewContractPage } from "./pages/NewContractPage";
 import { SigningPage } from "./pages/SigningPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { PrivacyPage } from "./pages/PrivacyPage";
+import { TermsPage } from "./pages/TermsPage";
+import { SupportPage } from "./pages/SupportPage";
 
 // ── Clerk setup ─────────────────────────────────────────────────────────────
 // REQUIRED — resolves the publishable key from hostname for multi-domain support
@@ -203,6 +206,11 @@ function AppRouter() {
             <Route path="/settings">
               {() => <Protected component={SettingsPage} />}
             </Route>
+
+            {/* Legal / Public pages */}
+            <Route path="/privacy" component={PrivacyPage} />
+            <Route path="/terms" component={TermsPage} />
+            <Route path="/support" component={SupportPage} />
 
             <Route component={NotFound} />
           </Switch>

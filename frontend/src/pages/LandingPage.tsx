@@ -13,19 +13,19 @@ const fadeUp = {
   hidden: { opacity: 0, y: 28 },
   visible: (i = 0) => ({
     opacity: 1, y: 0,
-    transition: { delay: i * 0.08, duration: 0.55, ease: [0.25, 0.1, 0.25, 1] },
+    transition: { delay: i * 0.08, duration: 0.55, ease: [0.25, 0.1, 0.25, 1] as any },
   }),
 };
 const fadeLeft = {
   hidden: { opacity: 0, x: -24 },
   visible: (i = 0) => ({
     opacity: 1, x: 0,
-    transition: { delay: i * 0.1, duration: 0.5, ease: [0.25, 0.1, 0.25, 1] },
+    transition: { delay: i * 0.1, duration: 0.5, ease: [0.25, 0.1, 0.25, 1] as any },
   }),
 };
 const scaleIn = {
   hidden: { opacity: 0, scale: 0.88 },
-  visible: { opacity: 1, scale: 1, transition: { duration: 0.5, ease: [0.34, 1.56, 0.64, 1] } },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.5, ease: [0.34, 1.56, 0.64, 1] as any } },
 };
 
 /* ── Feature data ────────────────────────────────────────────────────────── */
@@ -375,9 +375,9 @@ export function LandingPage() {
           </div>
           <p className="text-slate-500 text-sm">© {new Date().getFullYear()} Saathi Sign. All rights reserved.</p>
           <div className="flex items-center gap-5 text-xs text-slate-500">
-            <span className="hover:text-slate-300 cursor-pointer transition-colors">Privacy</span>
-            <span className="hover:text-slate-300 cursor-pointer transition-colors">Terms</span>
-            <span className="hover:text-slate-300 cursor-pointer transition-colors">Support</span>
+            <Link href="/privacy" className="hover:text-slate-300 transition-colors">Privacy</Link>
+            <Link href="/terms" className="hover:text-slate-300 transition-colors">Terms</Link>
+            <Link href="/support" className="hover:text-slate-300 transition-colors">Support</Link>
           </div>
         </div>
       </footer>

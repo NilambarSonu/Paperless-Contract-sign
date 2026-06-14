@@ -2,7 +2,7 @@ kind = "web"
 previewPath = "/"
 title = "Saathi Sign"
 version = "1.0.0"
-id = "artifacts/saathi-sign"
+id = "frontend"
 router = "path"
 
 [[integratedSkills]]
@@ -19,7 +19,7 @@ run = "pnpm --filter @workspace/saathi-sign run dev"
 
 [services.production]
 build = [ "pnpm", "--filter", "@workspace/saathi-sign", "run", "build" ]
-publicDir = "artifacts/saathi-sign/dist/public"
+publicDir = "frontend/dist/public"
 serve = "static"
 
 [[services.production.rewrites]]
