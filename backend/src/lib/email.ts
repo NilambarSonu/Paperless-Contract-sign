@@ -107,13 +107,23 @@ export async function sendSigningLinkEmail(opts: SendSigningLinkEmailOpts): Prom
 
   if (resend) {
     try {
-      await resend.emails.send({
-        from: `${fromName} <${fromEmail}>`,
+      // For unverified domains on Resend, you MUST send from "onboarding@resend.dev"
+      // If the user hasn't set a custom SMTP_USER, we default to the Resend testing email
+      const resendFromEmail = opts.fromEmail ?? process.env["SMTP_USER"] ?? "onboarding@resend.dev";
+      
+      const { data, error } = await resend.emails.send({
+        from: `${fromName} <${resendFromEmail}>`,
         to: opts.to,
         subject: `Action Required: Sign "${opts.contractTitle}"`,
         html,
       });
-      logger.info({ to: opts.to }, "Signing link email sent via Resend");
+      
+      if (error) {
+        logger.error({ error, to: opts.to }, "Resend API returned an error");
+        return false;
+      }
+      
+      logger.info({ to: opts.to, id: data?.id }, "Signing link email sent via Resend");
       return true;
     } catch (err) {
       logger.error({ err, to: opts.to }, "Failed to send signing link email via Resend");
@@ -222,13 +232,21 @@ export async function sendRejectionEmail(opts: SendRejectionEmailOpts): Promise<
 
   if (resend) {
     try {
-      await resend.emails.send({
-        from: `${fromName} <${fromEmail}>`,
+      const resendFromEmail = opts.fromEmail ?? process.env["SMTP_USER"] ?? "onboarding@resend.dev";
+      
+      const { data, error } = await resend.emails.send({
+        from: `${fromName} <${resendFromEmail}>`,
         to: opts.to,
         subject: `Contract Rejected: "${opts.contractTitle}" — Client Feedback`,
         html,
       });
-      logger.info({ to: opts.to }, "Rejection email sent via Resend");
+      
+      if (error) {
+        logger.error({ error, to: opts.to }, "Resend API returned an error");
+        return false;
+      }
+      
+      logger.info({ to: opts.to, id: data?.id }, "Rejection email sent via Resend");
       return true;
     } catch (err) {
       logger.error({ err, to: opts.to }, "Failed to send rejection email via Resend");
@@ -295,13 +313,21 @@ export async function sendSignedConfirmationEmail(opts: SendSignedConfirmationOp
 
   if (resend) {
     try {
-      await resend.emails.send({
-        from: `${fromName} <${fromEmail}>`,
+      const resendFromEmail = opts.fromEmail ?? process.env["SMTP_USER"] ?? "onboarding@resend.dev";
+      
+      const { data, error } = await resend.emails.send({
+        from: `${fromName} <${resendFromEmail}>`,
         to: opts.to,
         subject: `Signed: "${opts.contractTitle}" — Your copy is ready`,
         html,
       });
-      logger.info({ to: opts.to }, "Confirmation email sent via Resend");
+      
+      if (error) {
+        logger.error({ error, to: opts.to }, "Resend API returned an error");
+        return false;
+      }
+      
+      logger.info({ to: opts.to, id: data?.id }, "Confirmation email sent via Resend");
       return true;
     } catch (err) {
       logger.error({ err, to: opts.to }, "Failed to send confirmation email via Resend");
