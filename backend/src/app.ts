@@ -83,7 +83,7 @@ const frontendDist = existsSync(frontendDistFromRoot) ? frontendDistFromRoot : f
 if (existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
   // Catch-all route to serve the React SPA index.html for client-side routing
-  app.get("*", (req: Request, res: Response) => {
+  app.use((req: Request, res: Response) => {
     res.sendFile(join(frontendDist, "index.html"));
   });
 } else {
