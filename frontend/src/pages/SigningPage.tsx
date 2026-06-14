@@ -236,7 +236,7 @@ export function SigningPage() {
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
     canvas.getContext("2d")?.drawImage(video, 0, 0);
-    setSelfieDataUrl(canvas.toDataURL("image/jpeg", 0.85));
+    setSelfieDataUrl(canvas.toDataURL("image/png"));
     streamRef.current?.getTracks().forEach((t) => t.stop());
 
     if (navigator.geolocation) {

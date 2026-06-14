@@ -276,8 +276,8 @@ export async function generateSignedPdf(opts: SignedPdfOptions): Promise<Uint8Ar
       const drawY = selfieBoxY + pad + (maxH - drawH) / 2;
 
       cert.drawImage(selfieImg, { x: drawX, y: drawY, width: drawW, height: drawH });
-    } catch {
-      // skip on error
+    } catch (err) {
+      console.error("Failed to embed selfie in PDF:", err);
     }
   }
 
