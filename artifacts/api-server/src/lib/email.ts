@@ -134,6 +134,93 @@ export interface SendSignedConfirmationOpts {
   fromEmail?: string;
 }
 
+export interface SendRejectionEmailOpts {
+  to: string;
+  contractTitle: string;
+  rejectorName: string;
+  reason: string;
+  fromName?: string;
+  fromEmail?: string;
+}
+
+export async function sendRejectionEmail(opts: SendRejectionEmailOpts): Promise<boolean> {
+  const transport = createTransport();
+  const fromEmail = opts.fromEmail ?? process.env["SMTP_USER"] ?? "noreply@saathisign.app";
+  const fromName = opts.fromName ?? "Saathi Sign";
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f4f8;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:40px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(16,110,190,0.08);">
+        <tr>
+          <td style="background:#0A1628;padding:32px 40px;text-align:center;">
+            <div style="color:#0FFCBF;font-size:22px;font-weight:800;letter-spacing:-0.5px;">SAATHI SIGN</div>
+            <div style="color:#7BA8C9;font-size:13px;margin-top:6px;">Secure E-Signature Platform</div>
+            <div style="height:3px;background:linear-gradient(90deg,#106EBE,#0FFCBF);border-radius:2px;margin-top:20px;"></div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:40px 40px 32px;">
+            <div style="text-align:center;margin-bottom:24px;">
+              <div style="width:60px;height:60px;background:#FFF0F0;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:28px;">&#10007;</div>
+            </div>
+            <p style="color:#0A1628;font-size:22px;font-weight:700;text-align:center;margin:0 0 8px;">Contract Rejected</p>
+            <p style="color:#5A7A9A;text-align:center;margin:0 0 28px;">Your client has reviewed the contract and requested changes.</p>
+
+            <div style="background:#F0F7FF;border:1px solid #D0E7FF;border-radius:12px;padding:20px 24px;margin-bottom:20px;">
+              <p style="color:#5A7A9A;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 4px;">Contract</p>
+              <p style="color:#0A1628;font-size:17px;font-weight:700;margin:0;">${opts.contractTitle}</p>
+            </div>
+
+            <div style="background:#F0F7FF;border:1px solid #D0E7FF;border-radius:12px;padding:20px 24px;margin-bottom:20px;">
+              <p style="color:#5A7A9A;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 4px;">Rejected by</p>
+              <p style="color:#0A1628;font-size:15px;font-weight:600;margin:0;">${opts.rejectorName}</p>
+            </div>
+
+            <div style="background:#FFF8F0;border:1px solid #FFD9A8;border-radius:12px;padding:20px 24px;margin-bottom:24px;">
+              <p style="color:#5A7A9A;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;">Feedback / Reason</p>
+              <p style="color:#0A1628;font-size:15px;line-height:1.6;margin:0;white-space:pre-wrap;">${opts.reason}</p>
+            </div>
+
+            <p style="color:#9BB0C5;font-size:13px;line-height:1.6;">Please review the feedback and send a revised contract when ready.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#F8FAFC;border-top:1px solid #E8EEF4;padding:24px 40px;text-align:center;">
+            <p style="color:#9BB0C5;font-size:12px;margin:0;">Sent via Saathi Sign — Secure E-Signature Platform</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+  `;
+
+  if (!transport) {
+    logger.info({ to: opts.to, contractTitle: opts.contractTitle, reason: opts.reason }, "Rejection email skipped — SMTP not configured");
+    return false;
+  }
+
+  try {
+    await transport.sendMail({
+      from: `"${fromName}" <${fromEmail}>`,
+      to: opts.to,
+      subject: `Contract Rejected: "${opts.contractTitle}" — Client Feedback`,
+      html,
+    });
+    logger.info({ to: opts.to }, "Rejection email sent");
+    return true;
+  } catch (err) {
+    logger.error({ err, to: opts.to }, "Failed to send rejection email");
+    return false;
+  }
+}
+
 export async function sendSignedConfirmationEmail(opts: SendSignedConfirmationOpts): Promise<boolean> {
   const transport = createTransport();
   if (!transport) {

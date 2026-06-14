@@ -1,7 +1,9 @@
-import { CheckCircle2, PenTool, Camera, MapPin, MonitorSmartphone, Loader2, RefreshCw, Download } from "lucide-react";
+import {
+  CheckCircle2, PenTool, Camera, MapPin, MonitorSmartphone,
+  Loader2, RefreshCw, Download, FileText, XCircle, AlertTriangle,
+} from "lucide-react";
 import { useRoute } from "wouter";
 import { useGetSigningPage, useSubmitSignature, getGetSigningPageQueryKey } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +13,128 @@ import SignatureCanvas from "react-signature-canvas";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 
+// ── Types ────────────────────────────────────────────────────────────────────
+type Phase = "preview" | "signing" | "success" | "rejected_sent";
+
+// ── Logo ─────────────────────────────────────────────────────────────────────
+function Logo() {
+  return (
+    <div className="flex items-center gap-2 mb-8">
+      <div className="bg-primary p-2 rounded-lg">
+        <PenTool className="w-5 h-5 text-white" />
+      </div>
+      <span className="font-display font-bold text-xl text-white tracking-tight">Saathi Sign</span>
+    </div>
+  );
+}
+
+// ── Rejection Modal ──────────────────────────────────────────────────────────
+function RejectionModal({
+  token,
+  contractTitle,
+  signerName,
+  onCancel,
+  onRejected,
+}: {
+  token: string;
+  contractTitle: string;
+  signerName: string;
+  onCancel: () => void;
+  onRejected: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  async function handleReject() {
+    if (!reason.trim()) {
+      toast({ variant: "destructive", title: "Please describe the issue before rejecting" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/sign/${token}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason.trim(), rejectorName: signerName }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(d.error ?? "Failed to submit rejection");
+      }
+      onRejected();
+    } catch (err: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Could not submit rejection",
+        description: err instanceof Error ? err.message : "Please try again",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(10,22,40,0.8)" }}>
+      <motion.div
+        initial={{ scale: 0.92, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.92, opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-8"
+      >
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+            <AlertTriangle className="w-5 h-5 text-red-500" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900">What needs to be changed?</h2>
+        </div>
+        <p className="text-sm text-slate-500 mb-5 ml-13">
+          Your feedback will be sent directly to the contract author — contract: <strong>{contractTitle}</strong>
+        </p>
+
+        <div className="space-y-2 mb-6">
+          <Label htmlFor="reject-reason" className="text-sm font-semibold">
+            Describe the issue <span className="text-red-500">*</span>
+          </Label>
+          <textarea
+            id="reject-reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="e.g. The payment terms on page 2 are incorrect. The rate should be $X instead of $Y. Also the termination clause needs revision..."
+            rows={5}
+            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder-slate-400 resize-none focus:outline-none focus:ring-2 focus:border-transparent"
+            style={{ focusRingColor: "#106EBE" } as React.CSSProperties}
+            disabled={submitting}
+          />
+          <p className="text-xs text-slate-400">{reason.length}/2000 characters</p>
+        </div>
+
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            onClick={onCancel}
+            disabled={submitting}
+            className="flex-1 h-12"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleReject}
+            disabled={submitting || !reason.trim()}
+            className="flex-1 h-12 font-semibold text-white"
+            style={{ background: submitting ? "#ccc" : "#DC2626" }}
+          >
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <XCircle className="w-4 h-4 mr-2" />}
+            {submitting ? "Sending..." : "Reject & Send Feedback"}
+          </Button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
 export function SigningPage() {
   const [, params] = useRoute("/sign/:token");
   const token = params?.token || "";
@@ -21,36 +145,43 @@ export function SigningPage() {
   const submitSignature = useSubmitSignature();
   const { toast } = useToast();
 
+  // ── Phase state ──────────────────────────────────────────────────────────
+  const [phase, setPhase] = useState<Phase>("preview");
+  const [showRejectModal, setShowRejectModal] = useState(false);
+
+  // ── Contract preview ─────────────────────────────────────────────────────
+  const [contractRead, setContractRead] = useState(false);
+
+  // ── Signing wizard step ──────────────────────────────────────────────────
   const [step, setStep] = useState(1);
 
-  // Camera / selfie
+  // ── Camera / selfie ──────────────────────────────────────────────────────
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState(false);
   const [selfieDataUrl, setSelfieDataUrl] = useState("");
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Metadata
+  // ── Metadata ─────────────────────────────────────────────────────────────
   const [ipAddress, setIpAddress] = useState("");
   const [locationString, setLocationString] = useState("");
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
 
-  // Form state
+  // ── Form state ───────────────────────────────────────────────────────────
   const [signerName, setSignerName] = useState("");
   const [signerEmail, setSignerEmail] = useState("");
   const [signerCompany, setSignerCompany] = useState("");
   const [signerAddress, setSignerAddress] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
 
-  // Signature
+  // ── Signature ────────────────────────────────────────────────────────────
   const sigCanvas = useRef<SignatureCanvas>(null);
 
-  // Result
+  // ── Result ───────────────────────────────────────────────────────────────
   const [signedPdfUrl, setSignedPdfUrl] = useState("");
-  const [success, setSuccess] = useState(false);
 
-  // ── Pre-fill form from pageData ──────────────────────────────────────────
+  // Pre-fill form from pageData
   useEffect(() => {
     if (pageData) {
       setSignerName(pageData.signerName || "");
@@ -59,7 +190,7 @@ export function SigningPage() {
     }
   }, [pageData]);
 
-  // ── Fetch IP on mount ────────────────────────────────────────────────────
+  // Fetch IP on mount
   useEffect(() => {
     fetch("https://api.ipify.org?format=json")
       .then((r) => r.json())
@@ -84,13 +215,13 @@ export function SigningPage() {
   }, []);
 
   useEffect(() => {
-    if (step === 1 && !selfieDataUrl) startCamera();
+    if (phase === "signing" && step === 1 && !selfieDataUrl) startCamera();
     return () => {
-      if (step !== 1) {
+      if (phase !== "signing" || step !== 1) {
         streamRef.current?.getTracks().forEach((t) => t.stop());
       }
     };
-  }, [step, selfieDataUrl, startCamera]);
+  }, [phase, step, selfieDataUrl, startCamera]);
 
   function captureSelfie() {
     const video = videoRef.current;
@@ -102,7 +233,6 @@ export function SigningPage() {
     setSelfieDataUrl(canvas.toDataURL("image/jpeg", 0.85));
     streamRef.current?.getTracks().forEach((t) => t.stop());
 
-    // Grab geolocation right after selfie
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -120,7 +250,7 @@ export function SigningPage() {
     startCamera();
   }
 
-  // ── Submit ───────────────────────────────────────────────────────────────
+  // ── Submit signature ─────────────────────────────────────────────────────
   async function handleSign() {
     if (!signerName.trim()) {
       toast({ variant: "destructive", title: "Full name is required" });
@@ -139,7 +269,9 @@ export function SigningPage() {
       return;
     }
 
-    const sigDataUrl = sigCanvas.current!.getTrimmedCanvas().toDataURL("image/png");
+    // Fix: use getCanvas().toDataURL() — avoids the getTrimmedCanvas import bug
+    const canvas = sigCanvas.current!.getCanvas();
+    const sigDataUrl = canvas.toDataURL("image/png");
 
     try {
       const result = await submitSignature.mutateAsync({
@@ -161,7 +293,7 @@ export function SigningPage() {
       });
 
       if (result.signedPdfUrl) setSignedPdfUrl(result.signedPdfUrl);
-      setSuccess(true);
+      setPhase("success");
     } catch (err: unknown) {
       const msg =
         err && typeof err === "object" && "response" in err
@@ -190,32 +322,61 @@ export function SigningPage() {
     );
   }
 
-  // ── Success ───────────────────────────────────────────────────────────────
-  if (success) {
+  // ── Rejection sent ────────────────────────────────────────────────────────
+  if (phase === "rejected_sent") {
     return (
-      <div className="min-h-screen gradient-hero flex items-center justify-center p-6">
+      <div className="min-h-screen gradient-hero flex flex-col items-center justify-center p-6">
+        <Logo />
         <motion.div
           initial={{ scale: 0.85, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 180, damping: 18 }}
-          className="w-full max-w-md text-center space-y-6"
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-10 text-center space-y-5"
+        >
+          <div className="w-20 h-20 mx-auto rounded-full bg-orange-50 flex items-center justify-center">
+            <XCircle className="w-10 h-10 text-orange-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 mb-2">Feedback Sent</h1>
+            <p className="text-slate-500 text-base leading-relaxed">
+              Your feedback has been sent to the contract author. They will review your comments and send a revised contract.
+            </p>
+          </div>
+          <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-600">
+            Contract: <strong>{pageData.title}</strong>
+          </div>
+          <p className="text-slate-400 text-sm">You can close this window.</p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // ── Success ───────────────────────────────────────────────────────────────
+  if (phase === "success") {
+    return (
+      <div className="min-h-screen gradient-hero flex flex-col items-center justify-center p-6">
+        <Logo />
+        <motion.div
+          initial={{ scale: 0.85, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 180, damping: 18 }}
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-10 text-center space-y-5"
         >
           <div
-            className="w-28 h-28 mx-auto rounded-full flex items-center justify-center"
+            className="w-24 h-24 mx-auto rounded-full flex items-center justify-center"
             style={{ background: "linear-gradient(135deg,#106EBE22,#0FFCBF22)", border: "2px solid #0FFCBF66" }}
           >
-            <CheckCircle2 className="w-14 h-14 text-accent" />
+            <CheckCircle2 className="w-12 h-12 text-accent" />
           </div>
-          <div className="text-white">
-            <h1 className="font-display text-4xl font-bold mb-3">Contract Signed!</h1>
-            <p className="text-slate-300 text-lg">
-              Your signature has been recorded. A signed copy has been emailed to both parties.
+          <div>
+            <h1 className="font-display text-3xl font-bold text-slate-900 mb-2">Contract Signed!</h1>
+            <p className="text-slate-500 text-base leading-relaxed">
+              Your signature has been recorded. A signed copy with your photo, IP address, location, and signature has been emailed to both you and the contract author.
             </p>
           </div>
           {signedPdfUrl && (
             <a href={signedPdfUrl} target="_blank" rel="noopener noreferrer">
               <Button
-                data-testid="button-download-pdf"
                 className="w-full h-14 text-lg font-bold gap-2"
                 style={{ background: "#0FFCBF", color: "#0A1628" }}
               >
@@ -224,34 +385,151 @@ export function SigningPage() {
               </Button>
             </a>
           )}
-          <p className="text-slate-500 text-sm">You can close this window.</p>
+          <p className="text-slate-400 text-sm">You can close this window.</p>
         </motion.div>
       </div>
     );
   }
 
-  // ── Step labels ───────────────────────────────────────────────────────────
+  // ── CONTRACT PREVIEW ──────────────────────────────────────────────────────
+  if (phase === "preview") {
+    const isPdf = pageData.originalFileUrl?.toLowerCase().includes(".pdf");
+
+    return (
+      <>
+        {/* Rejection modal */}
+        <AnimatePresence>
+          {showRejectModal && (
+            <RejectionModal
+              token={token}
+              contractTitle={pageData.title}
+              signerName={pageData.signerName}
+              onCancel={() => setShowRejectModal(false)}
+              onRejected={() => {
+                setShowRejectModal(false);
+                setPhase("rejected_sent");
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        <div className="min-h-screen gradient-hero py-10 px-4 flex flex-col items-center">
+          <Logo />
+
+          <div className="w-full max-w-4xl space-y-5">
+            {/* Header card */}
+            <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+              <div className="h-1 w-full bg-gradient-to-r from-primary to-accent" />
+              <div className="px-8 py-6 border-b">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Contract for Review</p>
+                <h1 className="text-2xl font-bold text-slate-900">{pageData.title}</h1>
+                <p className="text-sm text-slate-500 mt-1">
+                  Prepared for <strong>{pageData.signerName}</strong> · {pageData.signerEmail}
+                </p>
+              </div>
+
+              {/* PDF or placeholder */}
+              {pageData.originalFileUrl ? (
+                isPdf ? (
+                  <div className="w-full" style={{ height: "72vh" }}>
+                    <iframe
+                      src={pageData.originalFileUrl}
+                      className="w-full h-full border-0"
+                      title="Contract PDF"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 gap-4 bg-slate-50">
+                    <FileText className="w-14 h-14 text-primary/40" />
+                    <p className="text-slate-500 text-sm">Preview not available for this file type.</p>
+                    <a
+                      href={pageData.originalFileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-semibold text-primary underline underline-offset-2"
+                    >
+                      Download & Open the Contract File
+                    </a>
+                    <p className="text-xs text-slate-400">Please read the full contract before proceeding.</p>
+                  </div>
+                )
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 gap-4 bg-slate-50">
+                  <FileText className="w-14 h-14 text-primary/40" />
+                  <p className="text-slate-600 font-semibold">{pageData.title}</p>
+                  <p className="text-slate-400 text-sm">No file attached — please read any contract details you have received before proceeding.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom action card */}
+            <div className="bg-white rounded-2xl shadow-xl px-8 py-7 space-y-5">
+              {/* Undertaking checkbox */}
+              <div className="flex items-start gap-3 bg-slate-50 rounded-xl px-5 py-4 border border-slate-100">
+                <Checkbox
+                  id="read-confirm"
+                  checked={contractRead}
+                  onCheckedChange={(c) => setContractRead(!!c)}
+                  className="mt-0.5 flex-shrink-0"
+                />
+                <label htmlFor="read-confirm" className="text-sm leading-relaxed cursor-pointer text-slate-700">
+                  I confirm that I have fully read and understood the entire contract above before choosing to proceed or reject.
+                </label>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowRejectModal(true)}
+                  className="flex-1 h-13 font-semibold gap-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                  style={{ height: "52px" }}
+                >
+                  <XCircle className="w-4 h-4" />
+                  Reject Contract
+                </Button>
+                <Button
+                  onClick={() => setPhase("signing")}
+                  disabled={!contractRead}
+                  className="flex-1 font-bold gap-2 text-white transition-all"
+                  style={{
+                    height: "52px",
+                    background: contractRead ? "linear-gradient(135deg,#106EBE,#0d5fa3)" : "#D0D5DD",
+                    cursor: contractRead ? "pointer" : "not-allowed",
+                  }}
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Proceed to Sign
+                </Button>
+              </div>
+              {!contractRead && (
+                <p className="text-center text-xs text-slate-400">
+                  Tick the checkbox above to confirm you have read the contract before signing.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── 3-STEP SIGNING WIZARD ─────────────────────────────────────────────────
   const stepLabels = ["Identity", "Details", "Sign"];
 
   return (
     <div className="min-h-screen gradient-hero py-10 px-4 flex flex-col items-center">
-      {/* Logo */}
-      <div className="flex items-center gap-2 mb-8">
-        <div className="bg-primary p-2 rounded-lg">
-          <PenTool className="w-5 h-5 text-white" />
-        </div>
-        <span className="font-display font-bold text-xl text-white tracking-tight">Saathi Sign</span>
-      </div>
+      <Logo />
 
-      <Card className="w-full max-w-2xl shadow-2xl border-0 overflow-hidden">
-        {/* Accent bar */}
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden">
         <div className="h-1 w-full bg-gradient-to-r from-primary to-accent" />
 
-        <CardHeader className="text-center border-b pb-6 pt-6 px-8">
-          <CardTitle className="font-display text-xl">{pageData.title}</CardTitle>
-          <CardDescription className="mt-1">
-            Prepared for <strong>{pageData.signerName}</strong> · {pageData.signerEmail}
-          </CardDescription>
+        {/* Header */}
+        <div className="text-center border-b pb-6 pt-6 px-8">
+          <h2 className="font-display text-xl font-bold text-slate-900">{pageData.title}</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Signing as <strong>{pageData.signerName}</strong> · {pageData.signerEmail}
+          </p>
 
           {/* Step indicator */}
           <div className="flex items-center justify-center gap-3 mt-6">
@@ -265,10 +543,9 @@ export function SigningPage() {
                     <div
                       className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all"
                       style={{
-                        background: done ? "#0FFCBF" : active ? "#106EBE" : undefined,
-                        color: done || active ? (done ? "#0A1628" : "#fff") : undefined,
+                        background: done ? "#0FFCBF" : active ? "#106EBE" : "#F0F4F8",
+                        color: done ? "#0A1628" : active ? "#fff" : "#94A3B8",
                       }}
-                      data-active={active}
                     >
                       {done ? <CheckCircle2 className="w-4 h-4" /> : s}
                     </div>
@@ -286,12 +563,13 @@ export function SigningPage() {
               );
             })}
           </div>
-        </CardHeader>
+        </div>
 
-        <CardContent className="p-8">
+        {/* Step content */}
+        <div className="p-8">
           <AnimatePresence mode="wait">
 
-            {/* ── STEP 1: Selfie ── */}
+            {/* STEP 1: Selfie */}
             {step === 1 && (
               <motion.div
                 key="step1"
@@ -308,17 +586,12 @@ export function SigningPage() {
                   </p>
                 </div>
 
-                {/* Camera / selfie — large box */}
                 <div
                   className="relative w-full rounded-2xl overflow-hidden border-2 border-dashed border-primary/30 bg-muted flex items-center justify-center"
                   style={{ height: "360px" }}
                 >
                   {selfieDataUrl ? (
-                    <img
-                      src={selfieDataUrl}
-                      alt="Your selfie"
-                      className="w-full h-full object-cover"
-                    />
+                    <img src={selfieDataUrl} alt="Your selfie" className="w-full h-full object-cover" />
                   ) : cameraError ? (
                     <div className="text-center space-y-3 p-6">
                       <Camera className="w-10 h-10 text-muted-foreground mx-auto" />
@@ -329,13 +602,7 @@ export function SigningPage() {
                     </div>
                   ) : (
                     <>
-                      <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className="w-full h-full object-cover"
-                      />
+                      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                       {!cameraReady && (
                         <div className="absolute inset-0 flex items-center justify-center bg-muted">
                           <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -344,7 +611,6 @@ export function SigningPage() {
                     </>
                   )}
 
-                  {/* Overlay corner guides */}
                   {!selfieDataUrl && cameraReady && !cameraError && (
                     <>
                       <div className="absolute top-3 left-3 w-8 h-8 border-l-2 border-t-2 border-accent rounded-tl-sm" />
@@ -355,7 +621,6 @@ export function SigningPage() {
                   )}
                 </div>
 
-                {/* Metadata pills */}
                 <div className="flex flex-wrap gap-2 justify-center">
                   <span className="flex items-center gap-1.5 text-xs bg-muted px-3 py-1.5 rounded-full text-muted-foreground">
                     <MapPin className="w-3.5 h-3.5 text-primary" /> Location will be recorded
@@ -365,29 +630,20 @@ export function SigningPage() {
                   </span>
                 </div>
 
-                {/* Buttons */}
                 {!selfieDataUrl ? (
                   <Button
-                    data-testid="button-capture-selfie"
                     onClick={captureSelfie}
                     disabled={!cameraReady || cameraError}
                     className="w-full h-12 text-base font-semibold gap-2 bg-primary text-white hover:bg-primary/90"
                   >
-                    <Camera className="w-5 h-5" />
-                    Capture Photo
+                    <Camera className="w-5 h-5" /> Capture Photo
                   </Button>
                 ) : (
                   <div className="flex gap-3">
-                    <Button
-                      data-testid="button-retake"
-                      variant="outline"
-                      onClick={retakeSelfie}
-                      className="flex-1 h-12 gap-2"
-                    >
+                    <Button variant="outline" onClick={retakeSelfie} className="flex-1 h-12 gap-2">
                       <RefreshCw className="w-4 h-4" /> Retake
                     </Button>
                     <Button
-                      data-testid="button-step1-continue"
                       onClick={() => setStep(2)}
                       className="flex-1 h-12 text-base font-semibold bg-primary text-white"
                     >
@@ -398,7 +654,7 @@ export function SigningPage() {
               </motion.div>
             )}
 
-            {/* ── STEP 2: Details ── */}
+            {/* STEP 2: Details */}
             {step === 2 && (
               <motion.div
                 key="step2"
@@ -416,72 +672,37 @@ export function SigningPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="signer-name">Full Name <span className="text-destructive">*</span></Label>
-                    <Input
-                      id="signer-name"
-                      data-testid="input-signer-name"
-                      value={signerName}
-                      onChange={(e) => setSignerName(e.target.value)}
-                      placeholder="Your full legal name"
-                    />
+                    <Input id="signer-name" value={signerName} onChange={(e) => setSignerName(e.target.value)} placeholder="Your full legal name" />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="signer-email">Email <span className="text-destructive">*</span></Label>
-                    <Input
-                      id="signer-email"
-                      data-testid="input-signer-email"
-                      type="email"
-                      value={signerEmail}
-                      onChange={(e) => setSignerEmail(e.target.value)}
-                      placeholder="your@email.com"
-                    />
+                    <Input id="signer-email" type="email" value={signerEmail} onChange={(e) => setSignerEmail(e.target.value)} placeholder="your@email.com" />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="signer-company">Company <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                    <Input
-                      id="signer-company"
-                      data-testid="input-signer-company"
-                      value={signerCompany}
-                      onChange={(e) => setSignerCompany(e.target.value)}
-                      placeholder="Company name"
-                    />
+                    <Input id="signer-company" value={signerCompany} onChange={(e) => setSignerCompany(e.target.value)} placeholder="Company name" />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="signer-address">Address <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                    <Input
-                      id="signer-address"
-                      data-testid="input-signer-address"
-                      value={signerAddress}
-                      onChange={(e) => setSignerAddress(e.target.value)}
-                      placeholder="City, Country"
-                    />
+                    <Input id="signer-address" value={signerAddress} onChange={(e) => setSignerAddress(e.target.value)} placeholder="City, Country" />
                   </div>
                 </div>
 
-                <div className="pt-1 flex items-start gap-3 bg-muted/40 rounded-xl p-4">
+                <div className="flex items-start gap-3 bg-muted/40 rounded-xl p-4">
                   <Checkbox
                     id="terms"
-                    data-testid="checkbox-terms"
                     checked={termsAccepted}
                     onCheckedChange={(c) => setTermsAccepted(!!c)}
                     className="mt-0.5"
                   />
                   <label htmlFor="terms" className="text-sm leading-relaxed cursor-pointer">
-                    I confirm I have read and fully understood the contract above, and I agree to sign it electronically.
-                    I understand this is legally binding.
+                    I confirm I am signing this contract electronically and understand this is legally binding.
                   </label>
                 </div>
 
                 <div className="flex gap-3 pt-2">
+                  <Button variant="outline" onClick={() => setStep(1)} className="flex-1 h-12">&larr; Back</Button>
                   <Button
-                    variant="outline"
-                    data-testid="button-step2-back"
-                    onClick={() => setStep(1)}
-                    className="flex-1 h-12"
-                  >
-                    &larr; Back
-                  </Button>
-                  <Button
-                    data-testid="button-step2-continue"
                     onClick={() => {
                       if (!signerName.trim() || !signerEmail.trim()) {
                         toast({ variant: "destructive", title: "Name and email are required" });
@@ -501,7 +722,7 @@ export function SigningPage() {
               </motion.div>
             )}
 
-            {/* ── STEP 3: Signature ── */}
+            {/* STEP 3: Signature */}
             {step === 3 && (
               <motion.div
                 key="step3"
@@ -517,7 +738,6 @@ export function SigningPage() {
                   </p>
                 </div>
 
-                {/* Signature pad */}
                 <div className="rounded-xl overflow-hidden border-2 border-primary/20 bg-white">
                   <SignatureCanvas
                     ref={sigCanvas}
@@ -531,10 +751,9 @@ export function SigningPage() {
 
                 <div className="flex justify-between items-center text-sm">
                   <button
-                    data-testid="button-clear-signature"
                     type="button"
                     onClick={() => sigCanvas.current?.clear()}
-                    className="text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+                    className="text-sm text-muted-foreground hover:text-primary transition-colors underline underline-offset-2"
                   >
                     Clear signature
                   </button>
@@ -542,43 +761,25 @@ export function SigningPage() {
                 </div>
 
                 <div className="flex gap-3">
+                  <Button variant="outline" onClick={() => setStep(2)} className="flex-1 h-12">&larr; Back</Button>
                   <Button
-                    variant="outline"
-                    data-testid="button-step3-back"
-                    onClick={() => setStep(2)}
-                    className="flex-1 h-12"
-                    disabled={submitSignature.isPending}
-                  >
-                    &larr; Back
-                  </Button>
-                  <Button
-                    data-testid="button-sign-submit"
                     onClick={handleSign}
                     disabled={submitSignature.isPending}
-                    className="flex-1 h-12 text-base font-bold gap-2"
-                    style={{ background: "#0FFCBF", color: "#0A1628" }}
+                    className="flex-1 h-12 text-base font-bold gap-2 text-white"
+                    style={{ background: "linear-gradient(135deg,#0FFCBF,#0de0aa)", color: "#0A1628" }}
                   >
-                    {submitSignature.isPending ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Generating PDF…
-                      </>
-                    ) : (
-                      "Sign & Submit"
-                    )}
+                    {submitSignature.isPending
+                      ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</>
+                      : <><PenTool className="w-4 h-4" /> Sign &amp; Submit</>
+                    }
                   </Button>
                 </div>
               </motion.div>
             )}
 
           </AnimatePresence>
-        </CardContent>
-      </Card>
-
-      <p className="text-slate-600 text-xs mt-8 text-center max-w-md">
-        Your signature, photo, IP address, and location are recorded as part of the legal audit trail.
-        This document is legally binding.
-      </p>
+        </div>
+      </div>
     </div>
   );
 }

@@ -24,6 +24,8 @@ export const contractsTable = pgTable("contracts", {
   longitude: real("longitude"),
   signedAt: timestamp("signed_at", { withTimezone: true }),
   customFields: text("custom_fields"),
+  rejectionReason: text("rejection_reason"),
+  rejectedAt: timestamp("rejected_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

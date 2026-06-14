@@ -1,12 +1,13 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, contractsTable, auditLogsTable } from "@workspace/db";
+import { db, contractsTable, auditLogsTable, settingsTable } from "@workspace/db";
 import { GetSigningPageParams, SubmitSignatureParams, SubmitSignatureBody } from "@workspace/api-zod";
 import { generateSignedPdf } from "../lib/pdf.js";
-import { sendSignedConfirmationEmail } from "../lib/email.js";
+import { sendSignedConfirmationEmail, sendRejectionEmail } from "../lib/email.js";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { existsSync } from "fs";
+import { z } from "zod";
 
 const router: IRouter = Router();
 
@@ -14,6 +15,12 @@ function getBaseUrl(): string {
   return process.env["REPLIT_DOMAINS"]
     ? `https://${process.env["REPLIT_DOMAINS"].split(",")[0]}`
     : `http://localhost:${process.env["PORT"] ?? 8080}`;
+}
+
+async function getAuthorEmail(): Promise<string | null> {
+  const [settings] = await db.select().from(settingsTable).limit(1);
+  if (!settings) return null;
+  return settings.notifyEmail || settings.businessEmail || null;
 }
 
 router.get("/sign/:token", async (req, res): Promise<void> => {
@@ -35,6 +42,11 @@ router.get("/sign/:token", async (req, res): Promise<void> => {
     return;
   }
 
+  if (contract.status === "rejected") {
+    res.status(400).json({ error: "This contract has been rejected by the client" });
+    return;
+  }
+
   res.json({
     contractId: contract.id,
     title: contract.title,
@@ -47,6 +59,60 @@ router.get("/sign/:token", async (req, res): Promise<void> => {
   });
 });
 
+// ── Reject contract ──────────────────────────────────────────────────────────
+const RejectBody = z.object({
+  reason: z.string().min(1, "Reason is required").max(2000),
+  rejectorName: z.string().optional(),
+});
+
+router.post("/sign/:token/reject", async (req, res): Promise<void> => {
+  const rawToken = Array.isArray(req.params.token) ? req.params.token[0] : req.params.token;
+
+  const body = RejectBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: "Reason is required" }); return; }
+
+  const [contract] = await db.select().from(contractsTable).where(eq(contractsTable.token, rawToken));
+  if (!contract) { res.status(404).json({ error: "Invalid signing link" }); return; }
+
+  if (contract.status === "signed") {
+    res.status(400).json({ error: "This contract has already been signed" });
+    return;
+  }
+  if (contract.status === "rejected") {
+    res.status(400).json({ error: "This contract has already been rejected" });
+    return;
+  }
+
+  await db.update(contractsTable).set({
+    status: "rejected",
+    rejectionReason: body.data.reason,
+    rejectedAt: new Date(),
+  }).where(eq(contractsTable.id, contract.id));
+
+  await db.insert(auditLogsTable).values({
+    contractId: contract.id,
+    type: "contract_rejected",
+    contractTitle: contract.title,
+    signerName: body.data.rejectorName ?? contract.signerName,
+    metadata: JSON.stringify({ reason: body.data.reason }),
+  });
+
+  // Email author
+  const authorEmail = await getAuthorEmail();
+  if (authorEmail) {
+    sendRejectionEmail({
+      to: authorEmail,
+      contractTitle: contract.title,
+      rejectorName: body.data.rejectorName ?? contract.signerName,
+      reason: body.data.reason,
+    }).catch(() => {});
+  }
+
+  req.log.info({ contractId: contract.id }, "Contract rejected");
+  res.json({ success: true, message: "Rejection recorded and feedback sent to the author." });
+});
+
+// ── Submit signature ─────────────────────────────────────────────────────────
 router.post("/sign/:token/submit", async (req, res): Promise<void> => {
   const rawToken = Array.isArray(req.params.token) ? req.params.token[0] : req.params.token;
   const params = SubmitSignatureParams.safeParse({ token: rawToken });
@@ -120,11 +186,19 @@ router.post("/sign/:token/submit", async (req, res): Promise<void> => {
     metadata: JSON.stringify({ ipAddress, locationString, deviceInfo, timestamp }),
   });
 
-  // Send confirmation emails to both parties (non-blocking)
+  // Email signed PDF to signer
   const emailOpts = { signerName, contractTitle: contract.title, signedPdfUrl: signedPdfUrl ?? undefined };
   sendSignedConfirmationEmail({ to: signerEmail, ...emailOpts }).catch(() => {});
-  if (contract.signerEmail !== signerEmail) {
-    sendSignedConfirmationEmail({ to: contract.signerEmail, ...emailOpts }).catch(() => {});
+
+  // Email signed PDF to author (from settings)
+  const authorEmail = await getAuthorEmail();
+  if (authorEmail && authorEmail !== signerEmail) {
+    sendSignedConfirmationEmail({
+      to: authorEmail,
+      signerName: `${signerName} (author copy)`,
+      contractTitle: contract.title,
+      signedPdfUrl: signedPdfUrl ?? undefined,
+    }).catch(() => {});
   }
 
   req.log.info({ contractId: contract.id, signerEmail }, "Contract signed");
