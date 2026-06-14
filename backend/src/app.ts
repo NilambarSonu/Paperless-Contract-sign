@@ -69,6 +69,15 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   next();
 }
 
+app.get("/", (req: Request, res: Response) => {
+  res.json({
+    status: "ok",
+    message: "Saathi Sign API Server",
+    version: "1.0.0",
+    healthz: "/api/healthz"
+  });
+});
+
 app.use("/api", router);
 
 export default app;

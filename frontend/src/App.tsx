@@ -16,10 +16,19 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { TermsPage } from "./pages/TermsPage";
 import { SupportPage } from "./pages/SupportPage";
-import { setBaseUrl } from "@workspace/api-client-react";
+import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
+import { useAuth } from "@clerk/react";
 
 // Set base URL for API requests using VITE_API_URL
 setBaseUrl(import.meta.env.VITE_API_URL || "");
+
+function ConfigureApiAuth() {
+  const { getToken } = useAuth();
+  useEffect(() => {
+    setAuthTokenGetter(() => getToken());
+  }, [getToken]);
+  return null;
+}
 
 // ── Clerk setup ─────────────────────────────────────────────────────────────
 // REQUIRED — resolves the publishable key from hostname for multi-domain support
@@ -190,6 +199,7 @@ function AppRouter() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <ClerkQueryClientCacheInvalidator />
+          <ConfigureApiAuth />
           <Switch>
             {/* Public routes */}
             <Route path="/" component={LandingPage} />

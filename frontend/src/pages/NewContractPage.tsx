@@ -10,6 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useCreateContract, useGenerateSigningLink } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { useAuth } from "@clerk/react";
 import {
   Loader2, Upload, FileText, Copy, Check, ExternalLink,
   Mail, ArrowLeft, Link2, X,
@@ -31,6 +32,7 @@ export function NewContractPage() {
   const [, setLocation] = useLocation();
   const createContract = useCreateContract();
   const generateLink = useGenerateSigningLink();
+  const { getToken } = useAuth();
 
   // File upload state
   const [file, setFile] = useState<File | null>(null);
@@ -77,10 +79,19 @@ export function NewContractPage() {
   async function uploadFile(f: File): Promise<string | null> {
     setUploading(true);
     try {
+      const token = await getToken();
       const fd = new FormData();
       fd.append("file", f);
       const apiUrl = import.meta.env.VITE_API_URL || "";
-      const res = await fetch(`${apiUrl}/api/contracts/upload-file`, { method: "POST", body: fd });
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      const res = await fetch(`${apiUrl}/api/contracts/upload-file`, {
+        method: "POST",
+        headers,
+        body: fd
+      });
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json() as { fileUrl: string };
       setUploadedFileUrl(data.fileUrl);
