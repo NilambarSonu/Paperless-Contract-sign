@@ -155,7 +155,7 @@ export function DashboardPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {contracts?.map((contract) => (
+                    {(Array.isArray(contracts) ? contracts : [])?.map((contract) => (
                       <TableRow key={contract.id} className="hover:bg-[#106EBE]/3 transition-colors border-b border-slate-50 group">
                         <TableCell className="font-medium text-[#0A1628] pl-6 py-4">
                           <span className="group-hover:text-[#106EBE] transition-colors">{contract.title}</span>

@@ -454,3 +454,39 @@
   .border.hover-elevate-2:not(.no-hover-interaction-elevate)::after,
   .border.active-elevate-2:not(.no-active-interaction-elevate)::after { inset: -1px; }
 }
+
+/* Figma Hero Styles */
+.hero-figma-gradient {
+  background: linear-gradient(to bottom left, #A5EDFF 0%, #C6EFFF 10%, #E3FEFF 22%, #F8E6FF 49%, #D5A5FC 95%, #FFFFFF 100%);
+}
+
+.btn-figma-gradient {
+  background: linear-gradient(to right, #B0BABC 0%, #BF5FE1 2%, #A78AC6 50%, #88BDCB 73%, #7DDAF1 100%);
+}
+
+.font-imbue { font-family: 'Imbue', serif; }
+.font-inconsolata { font-family: 'Inconsolata', monospace; }
+.font-lancelot { font-family: 'Lancelot', cursive; }
+.font-fleur { font-family: 'Fleur De Leah', cursive; }
+.font-itim { font-family: 'Itim', cursive; }
+.font-jaldi { font-family: 'Jaldi', sans-serif; }
+.font-josefin { font-family: 'Josefin Slab', serif; }
+
+.float-figma {
+  animation: float-figma 5s ease-in-out infinite;
+}
+
+@keyframes float-figma {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+.glass-card {
+  background: rgba(20, 20, 20, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 20px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+

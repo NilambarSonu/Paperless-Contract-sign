@@ -13,8 +13,9 @@ import { z } from "zod";
 const router: IRouter = Router();
 
 function getBaseUrl(): string {
-  if (process.env["RENDER_EXTERNAL_URL"]) return process.env["RENDER_EXTERNAL_URL"];
-  if (process.env["FRONTEND_URL"]) return process.env["FRONTEND_URL"];
+  if (process.env["BACKEND_URL"]) return process.env["BACKEND_URL"];
+  // Use the new custom domain for Render
+  if (process.env["RENDER_EXTERNAL_URL"]) return "https://e-sign.nilambarsonu.me";
   if (process.env["REPLIT_DOMAINS"]) return `https://${process.env["REPLIT_DOMAINS"].split(",")[0]}`;
   return `http://localhost:${process.env["PORT"] ?? 8080}`;
 }

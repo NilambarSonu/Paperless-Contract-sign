@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { Link } from "wouter";
 import { Navbar } from "@/components/layout/Navbar";
+import { HeroSection } from "@/components/layout/HeroSection";
 import { Button } from "@/components/ui/button";
 import {
   FileSignature, Lock, Globe, Zap, Camera, Mail, Shield, FileText,
@@ -81,87 +82,7 @@ export function LandingPage() {
       <Navbar />
 
       {/* ══ Hero ══════════════════════════════════════════════════════════ */}
-      <section className="relative pt-32 pb-28 lg:pt-48 lg:pb-40 px-6 gradient-hero text-white overflow-hidden">
-        {/* Background orbs */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="animate-float-slow absolute top-1/4 left-1/5 w-[600px] h-[600px] bg-[#106EBE]/12 rounded-full blur-3xl" />
-          <div className="animate-float absolute bottom-1/4 right-1/5 w-[500px] h-[500px] bg-[#0FFCBF]/7 rounded-full blur-3xl" />
-          <div className="absolute top-10 right-10 w-2 h-2 bg-[#0FFCBF] rounded-full animate-pulse" />
-          <div className="absolute top-32 left-20 w-1 h-1 bg-[#106EBE]/60 rounded-full animate-pulse" style={{ animationDelay: "1s" }} />
-          <div className="absolute bottom-20 left-1/3 w-1.5 h-1.5 bg-[#0FFCBF]/60 rounded-full animate-pulse" style={{ animationDelay: "2s" }} />
-          {/* Grid lines */}
-          <div className="absolute inset-0 opacity-[0.03]"
-            style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)", backgroundSize: "60px 60px" }} />
-        </div>
-
-        <motion.div
-          initial="hidden" animate="visible"
-          className="max-w-5xl mx-auto text-center relative z-10"
-        >
-          {/* Badge */}
-          <motion.div variants={fadeUp} custom={0}>
-            <div className="inline-flex items-center gap-2 bg-white/6 border border-white/10 rounded-full px-5 py-2 text-xs font-medium text-slate-300 mb-10 backdrop-blur-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#0FFCBF] animate-pulse" />
-              Secure · Legally Trackable · International
-              <span className="ml-1 px-2 py-0.5 bg-[#0FFCBF]/15 text-[#0FFCBF] rounded-full text-[10px] font-bold tracking-wide">NEW</span>
-            </div>
-          </motion.div>
-
-          {/* Headline */}
-          <motion.h1
-            variants={fadeUp} custom={1}
-            className="font-display text-5xl lg:text-7xl xl:text-8xl font-bold tracking-tight mb-6 leading-[1.05]"
-          >
-            Professional Freelance
-            <br />
-            <span className="gradient-text-animated">Contracts & E-Signatures</span>
-          </motion.h1>
-
-          {/* Sub */}
-          <motion.p variants={fadeUp} custom={2}
-            className="text-lg lg:text-xl text-slate-300/90 mb-12 max-w-2xl mx-auto font-light leading-relaxed"
-          >
-            Send contracts, collect legally-trackable signatures, and generate
-            professional signed PDFs — all in under a minute.
-          </motion.p>
-
-          {/* CTAs */}
-          <motion.div variants={fadeUp} custom={3}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4"
-          >
-            <Link href="/dashboard/contracts/new">
-              <Button
-                size="lg"
-                className="group w-full sm:w-auto bg-[#106EBE] hover:bg-[#0d5fa3] text-white font-semibold text-base px-8 h-14 rounded-xl glow-blue transition-all duration-300 hover:glow-blue-lg"
-              >
-                Upload Contract
-                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </Link>
-            <Link href="/dashboard">
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full sm:w-auto border-white/15 text-white hover:bg-white/8 hover:border-[#0FFCBF]/40 font-medium text-base px-8 h-14 rounded-xl glass transition-all duration-300"
-              >
-                Go to Dashboard
-              </Button>
-            </Link>
-          </motion.div>
-
-          {/* Trust row */}
-          <motion.div variants={fadeUp} custom={4}
-            className="flex flex-wrap items-center justify-center gap-6 mt-14 text-xs text-slate-400"
-          >
-            {["IT Act 2000 compliant", "ESIGN / eIDAS ready", "UUID token security", "Instant PDF delivery"].map((t) => (
-              <span key={t} className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#0FFCBF]" />
-                {t}
-              </span>
-            ))}
-          </motion.div>
-        </motion.div>
-      </section>
+      <HeroSection />
 
       {/* ══ Stats bar ════════════════════════════════════════════════════ */}
       <section ref={statsRef} className="border-b border-t border-[#106EBE]/10 bg-white">
