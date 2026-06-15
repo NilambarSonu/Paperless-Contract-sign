@@ -107,10 +107,10 @@ export async function sendSigningLinkEmail(opts: SendSigningLinkEmailOpts): Prom
 
   if (resend) {
     try {
-      // For unverified domains on Resend, you MUST send from "onboarding@resend.dev"
-      // If the user hasn't set a custom SMTP_USER, we default to the Resend testing email
-      let resendFromEmail = opts.fromEmail || process.env["SMTP_USER"] || "onboarding@resend.dev";
-      if (!resendFromEmail.includes("@")) resendFromEmail = "onboarding@resend.dev";
+      // For verified domains on Resend, we must use an email address with that domain
+      // If the user hasn't set a custom SMTP_USER or RESEND_FROM_EMAIL, we default to the verified domain
+      let resendFromEmail = opts.fromEmail || process.env["RESEND_FROM_EMAIL"] || process.env["SMTP_USER"] || "noreply@esign.nilambarsonu.me";
+      if (!resendFromEmail.includes("@")) resendFromEmail = "noreply@esign.nilambarsonu.me";
       
       const { data, error } = await resend.emails.send({
         from: `${fromName} <${resendFromEmail}>`,
