@@ -155,7 +155,8 @@ router.post("/contracts/:id/generate-link", async (req, res): Promise<void> => {
 
   await db.update(contractsTable).set({ expiresAt }).where(eq(contractsTable.id, params.data.id));
 
-  const signingUrl = `${getBaseUrl()}/sign/${contract.token}`;
+  const frontendUrl = process.env["FRONTEND_URL"] || "http://localhost:5173";
+  const signingUrl = `${frontendUrl}/sign/${contract.token}`;
 
   // Log link generation
   await db.insert(auditLogsTable).values({
