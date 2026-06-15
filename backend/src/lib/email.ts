@@ -233,8 +233,8 @@ export async function sendRejectionEmail(opts: SendRejectionEmailOpts): Promise<
 
   if (resend) {
     try {
-      let resendFromEmail = opts.fromEmail || process.env["SMTP_USER"] || "onboarding@resend.dev";
-      if (!resendFromEmail.includes("@")) resendFromEmail = "onboarding@resend.dev";
+      let resendFromEmail = opts.fromEmail || process.env["RESEND_FROM_EMAIL"] || process.env["SMTP_USER"] || "noreply@esign.nilambarsonu.me";
+      if (!resendFromEmail.includes("@")) resendFromEmail = "noreply@esign.nilambarsonu.me";
       
       const { data, error } = await resend.emails.send({
         from: `${fromName} <${resendFromEmail}>`,
@@ -315,8 +315,8 @@ export async function sendSignedConfirmationEmail(opts: SendSignedConfirmationOp
 
   if (resend) {
     try {
-      let resendFromEmail = opts.fromEmail || process.env["SMTP_USER"] || "onboarding@resend.dev";
-      if (!resendFromEmail.includes("@")) resendFromEmail = "onboarding@resend.dev";
+      let resendFromEmail = opts.fromEmail || process.env["RESEND_FROM_EMAIL"] || process.env["SMTP_USER"] || "noreply@esign.nilambarsonu.me";
+      if (!resendFromEmail.includes("@")) resendFromEmail = "noreply@esign.nilambarsonu.me";
       
       const { data, error } = await resend.emails.send({
         from: `${fromName} <${resendFromEmail}>`,
