@@ -102,7 +102,7 @@ export function HeroSection() {
           </div>
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-[#ff6be3] shadow-[0_0_10px_rgba(255,107,227,0.6)]" />
-            <span className="text-[#64e9ec]">Instant PDF Delivery</span>
+            <span className="text-[#106EBE]">Instant PDF Delivery</span>
           </div>
         </div>
 
