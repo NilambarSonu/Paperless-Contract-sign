@@ -88,7 +88,7 @@ export function HeroSection() {
       </div>
 
       {/* Bottom Row: Status Labels and Signature */}
-      <div className="max-w-[1440px] w-full mx-auto flex flex-col lg:flex-row items-center lg:items-end justify-between relative z-25 mt-10 lg:mt-16 pointer-events-none gap-8 lg:gap-0">
+      <div className="max-w-[1440px] w-full mx-auto flex flex-col lg:flex-row items-center lg:items-end justify-between relative z-25 mt-20 lg:mt-40 pointer-events-none gap-8 lg:gap-0">
         
         {/* Status Labels */}
         <div className="flex flex-col sm:flex-row flex-wrap items-center sm:items-start lg:items-center gap-3 sm:gap-6 lg:gap-37 font-jaldi text-[14px] sm:text-[15px] lg:text-[15px] text-black font-semibold pointer-events-auto">

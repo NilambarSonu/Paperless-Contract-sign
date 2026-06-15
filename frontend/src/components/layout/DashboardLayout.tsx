@@ -88,8 +88,8 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         {/* Logo */}
         <div className="h-16 flex items-center px-5 border-b border-white/6">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 bg-[#106EBE] rounded-lg flex items-center justify-center group-hover:bg-[#0d5fa3] transition-colors shadow-lg shadow-[#106EBE]/30">
-              <FileSignature className="w-4 h-4 text-white" />
+            <div className="w-8 h-8 bg-[#106EBE] rounded-lg flex items-center justify-center group-hover:bg-[#0d5fa3] transition-colors shadow-lg shadow-[#106EBE]/30 overflow-hidden">
+              <img src="/favicon.png" alt="Saathi Sign Icon" className="w-full h-full object-cover" />
             </div>
             <span className="font-display font-bold text-white text-lg tracking-tight">Saathi Sign</span>
           </Link>
@@ -117,8 +117,8 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
         {/* Mobile Header */}
         <header className="h-16 bg-white border-b flex items-center justify-between px-4 md:hidden sticky top-0 z-40 shadow-sm">
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-[#106EBE] rounded-lg flex items-center justify-center">
-              <FileSignature className="w-3.5 h-3.5 text-white" />
+            <div className="w-7 h-7 bg-[#106EBE] rounded-lg flex items-center justify-center overflow-hidden">
+              <img src="/favicon.png" alt="Saathi Sign Icon" className="w-full h-full object-cover" />
             </div>
             <span className="font-display font-bold text-[#0A1628] text-base">Saathi Sign</span>
           </Link>
